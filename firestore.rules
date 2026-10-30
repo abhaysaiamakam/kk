@@ -37,19 +37,14 @@ service cloud.firestore {
     function isValidUser(data) {
       return data.uid is string && data.uid.size() <= 128 &&
              data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100 &&
-             data.email is string && data.email.size() <= 150 &&
-             data.role in ['patient', 'caregiver'] &&
-             data.preferredLanguage in ['en', 'kn', 'hi'] &&
-             data.isActive is bool;
+             data.role in ['patient', 'caregiver'];
     }
 
     match /users/{uid} {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
       allow create: if isOwner(uid) && isValidUser(incoming()) && incoming().uid == request.auth.uid;
-      allow update: if isSignedIn() && isValidUser(incoming()) &&
-                       incoming().uid == existing().uid &&
-                       incoming().role == existing().role;
+      allow update: if isSignedIn() && isValidUser(incoming());
       allow delete: if isOwner(uid);
     }
 
@@ -150,17 +145,21 @@ service cloud.firestore {
 
     // 9. Caregiver Requests
     function isValidCaregiverRequest(data) {
-      return data.requestId is string &&
-             data.caregiverUid is string &&
-             data.patientId is string &&
-             data.status in ['pending', 'approved', 'declined'];
+      return data.requestId is string && data.requestId.size() <= 128 &&
+             data.caregiverUid is string && data.caregiverUid.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.patientUid is string && data.patientUid.size() <= 128 &&
+             data.status in ['pending', 'approved', 'accepted', 'rejected', 'declined'];
     }
 
     match /caregiverRequests/{requestId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidCaregiverRequest(incoming());
+      allow create: if isSignedIn() &&
+                       incoming().caregiverUid == request.auth.uid &&
+                       isValidCaregiverRequest(incoming());
       allow update: if isSignedIn() && isValidCaregiverRequest(incoming());
-      allow delete: if isSignedIn();
+      allow delete: if isSignedIn() &&
+                       (existing().caregiverUid == request.auth.uid || existing().patientUid == request.auth.uid);
     }
   }
 }

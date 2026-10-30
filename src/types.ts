@@ -173,6 +173,7 @@ export interface LiveLocation {
 
 export interface PatientProfile {
   id: string;
+  uid?: string;
   name: string;
   age: number;
   gender: string;

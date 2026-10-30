@@ -32,7 +32,8 @@ import {
   where, 
   getDocs, 
   arrayUnion, 
-  addDoc 
+  addDoc,
+  onSnapshot
 } from 'firebase/firestore';
 import { Language, PatientProfile } from '../types';
 import { calculateAgeFromDob } from '../utils/ageUtils';
@@ -364,11 +365,29 @@ export const authService = {
     caregiverPhotoURL?: string;
     patientId: string;
   }): Promise<{ connectionRequest: CaregiverConnectionRequest; patientName: string }> {
-    const targetPatient = await this.findPatientById(params.patientId);
+    const formattedPatientId = params.patientId.trim().toUpperCase();
+    console.log('[CaregiverConnection] Verifying Patient ID:', formattedPatientId);
+
+    // 1. Verify Patient ID exists
+    const targetPatient = await this.findPatientById(formattedPatientId);
     if (!targetPatient) {
-      throw new Error(
-        `Patient ID "${params.patientId}" was not found. Please verify the Patient ID.`
-      );
+      console.warn('[CaregiverConnection] Patient ID not found:', formattedPatientId);
+      throw new Error(`Patient ID "${formattedPatientId}" does not exist. Please check the ID and try again.`);
+    }
+
+    console.log('[CaregiverConnection] Patient ID verified successfully:', targetPatient);
+
+    // 2. Check if caregiver is already connected to this patient
+    const caregiverProfile = await this.getUserProfile(params.caregiverUid);
+    if (caregiverProfile?.connectedPatientIds?.includes(formattedPatientId)) {
+      throw new Error(`You are already connected to patient "${targetPatient.fullName}".`);
+    }
+
+    // 3. Check if a request is already pending
+    const existingPending = await this.getPendingRequestsForPatient(targetPatient.uid, formattedPatientId);
+    const hasPendingFromMe = existingPending.some(r => r.caregiverUid === params.caregiverUid);
+    if (hasPendingFromMe) {
+      throw new Error(`A connection request is already pending for patient "${targetPatient.fullName}".`);
     }
 
     const now = new Date().toISOString();
@@ -381,7 +400,7 @@ export const authService = {
       caregiverPhone: params.caregiverPhone,
       caregiverEmail: params.caregiverEmail,
       caregiverPhotoURL: params.caregiverPhotoURL,
-      patientId: params.patientId.toUpperCase(),
+      patientId: formattedPatientId,
       patientUid: targetPatient.uid,
       patientName: targetPatient.fullName,
       status: 'pending',
@@ -390,11 +409,14 @@ export const authService = {
 
     const reqPath = `caregiverRequests/${requestId}`;
     try {
+      console.log('[CaregiverConnection] Creating connection request document:', requestId, connectionRequest);
       await setDoc(doc(firestore, 'caregiverRequests', requestId), connectionRequest);
+      
       // Update caregiver user profile pendingPatientIds
       await updateDoc(doc(firestore, 'users', params.caregiverUid), {
-        pendingPatientIds: arrayUnion(params.patientId.toUpperCase())
+        pendingPatientIds: arrayUnion(formattedPatientId)
       });
+      console.log('[CaregiverConnection] Connection request sent successfully to patient UID:', targetPatient.uid);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, reqPath);
     }
@@ -453,14 +475,58 @@ export const authService = {
   },
 
   /**
-   * Respond to caregiver connection request (Approve or Reject)
+   * Real-time listener for pending connection requests on the recipient's dashboard (onSnapshot)
+   */
+  subscribeToPendingRequestsForPatient(
+    patientUid: string,
+    patientId: string | undefined,
+    onUpdate: (requests: CaregiverConnectionRequest[]) => void,
+    onError?: (err: any) => void
+  ): () => void {
+    console.log(`[CaregiverConnection] Starting real-time onSnapshot listener for patientUid: "${patientUid}", patientId: "${patientId}"`);
+
+    const q = query(
+      collection(firestore, 'caregiverRequests'),
+      where('status', '==', 'pending')
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const results: CaregiverConnectionRequest[] = [];
+        snapshot.docs.forEach((docSnap) => {
+          const data = docSnap.data() as CaregiverConnectionRequest;
+          const matchesUid = patientUid && data.patientUid === patientUid;
+          const matchesId = patientId && data.patientId && data.patientId.toUpperCase() === patientId.toUpperCase();
+          if (matchesUid || matchesId) {
+            results.push({
+              ...data,
+              id: data.id || docSnap.id
+            });
+          }
+        });
+        console.log(`[CaregiverConnection] Real-time snapshot update: ${results.length} pending request(s) found for patient.`);
+        onUpdate(results);
+      },
+      (error) => {
+        console.error('[CaregiverConnection] Snapshot listener error:', error);
+        if (onError) onError(error);
+      }
+    );
+
+    return unsubscribe;
+  },
+
+  /**
+   * Respond to caregiver connection request (Accept or Reject)
    */
   async respondToConnectionRequest(
     request: CaregiverConnectionRequest,
     approve: boolean
   ): Promise<void> {
     const reqPath = `caregiverRequests/${request.id}`;
-    const newStatus = approve ? 'approved' : 'rejected';
+    const newStatus = approve ? 'accepted' : 'rejected';
+    console.log(`[CaregiverConnection] Responding to request ${request.id}: ${newStatus}`);
 
     try {
       // 1. Update Request Doc
@@ -494,6 +560,9 @@ export const authService = {
         await updateDoc(doc(firestore, 'users', request.caregiverUid), {
           connectedPatientIds: arrayUnion(request.patientId)
         });
+        console.log(`[CaregiverConnection] Patient-Caregiver relationship established between patient ${request.patientUid} and caregiver ${request.caregiverUid}`);
+      } else {
+        console.log(`[CaregiverConnection] Request ${request.id} rejected.`);
       }
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, reqPath);

@@ -85,32 +85,40 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   const [pendingRequests, setPendingRequests] = useState<CaregiverConnectionRequest[]>([]);
   const t = translations[language];
 
-  // Fetch pending caregiver connection requests for this patient
+  // Real-time listener for pending caregiver connection requests (onSnapshot)
   useEffect(() => {
-    let isMounted = true;
-    const loadRequests = async () => {
-      try {
-        const reqs = await authService.getPendingRequestsForPatient(patient.id);
-        if (isMounted && reqs) {
-          setPendingRequests(reqs);
-        }
-      } catch (err) {
-        console.warn('Could not fetch pending caregiver requests:', err);
+    const pUid = patient.uid || '';
+    const pId = patient.id || '';
+
+    console.log('[PatientDashboard] Registering real-time onSnapshot listener for pending requests. pUid:', pUid, 'pId:', pId);
+    const unsubscribe = authService.subscribeToPendingRequestsForPatient(
+      pUid,
+      pId,
+      (requests) => {
+        setPendingRequests(requests);
+      },
+      (err) => {
+        console.warn('Real-time connection listener notice:', err);
       }
+    );
+
+    return () => {
+      console.log('[PatientDashboard] Unsubscribing real-time request listener.');
+      unsubscribe();
     };
-    loadRequests();
-    return () => { isMounted = false; };
-  }, [patient.id]);
+  }, [patient.uid, patient.id]);
 
   const handleRespondRequest = async (req: CaregiverConnectionRequest, approve: boolean) => {
     try {
       await authService.respondToConnectionRequest(req, approve);
       setPendingRequests(prev => prev.filter(r => r.id !== req.id));
       if (approve) {
-        alert(`Caregiver ${req.caregiverName} has been connected to your account successfully!`);
+        alert(`Connection approved! Caregiver ${req.caregiverName} is now connected to your account.`);
+      } else {
+        alert(`Connection request from ${req.caregiverName} was declined.`);
       }
     } catch (err) {
-      alert('Could not update caregiver request. Please try again.');
+      alert('Could not update connection request. Please try again.');
     }
   };
 

@@ -90,6 +90,7 @@ export default function App() {
   // Active patient object - if user is patient, construct from their real Firestore profile
   const userPatientProfile: PatientProfile | null = userProfile && userRole === 'patient' ? {
     id: userProfile.patientId || `P-${userProfile.uid.slice(0, 6).toUpperCase()}`,
+    uid: userProfile.uid,
     name: userProfile.fullName || 'Patient',
     age: calculateAgeFromDob(userProfile.dateOfBirth || userProfile.age),
     gender: 'Not added yet',
