@@ -206,23 +206,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
       )}
 
-      {/* TOP ARCHITECTURAL HIGHLIGHTS STRIP matching header banner in image */}
-      <div className="bg-white/80 backdrop-blur-xs rounded-2xl p-2.5 border border-[#A8C9B0]/40 shadow-2xs overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[560px] text-[11px] font-semibold text-gray-700 divide-x divide-gray-200">
-          <div className="flex items-center space-x-1.5 px-3">
-            <Radio className="w-3.5 h-3.5 text-[#3B664B] animate-pulse" />
-            <span><strong>Real-time Sync:</strong> Tasks &amp; Updates</span>
-          </div>
-          <div className="flex items-center space-x-1.5 px-3">
-            <Sparkles className="w-3.5 h-3.5 text-[#A8C9B0]" />
-            <span><strong>AI Overview:</strong> Voice &amp; Text</span>
-          </div>
-          <div className="flex items-center space-x-1.5 px-3">
-            <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-            <span><strong>Secure &amp; Private:</strong> Role-Based</span>
-          </div>
-        </div>
-      </div>
+
 
       {/* Top Greeting matching Section 2 */}
       <div>

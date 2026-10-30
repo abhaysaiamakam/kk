@@ -57,12 +57,12 @@ export default function App() {
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [registrationFlow, setRegistrationFlow] = useState<'patient' | 'caregiver' | null>(null);
   const [language, setLanguage] = useState<Language>('en');
-  const [userName, setUserName] = useState('Aarav Sharma');
+  const [userName, setUserName] = useState('');
 
-  // Real-Time Database Synchronized State
-  const [patients, setPatients] = useState<PatientProfile[]>(() => db.getPatients());
-  const [activePatientId, setActivePatientId] = useState<string>('P-10482');
-  const [tasks, setTasks] = useState<TaskItem[]>(() => db.getTasks());
+  // Real-Time Database Synchronized State (starts empty for real Firestore subscription)
+  const [patients, setPatients] = useState<PatientProfile[]>([]);
+  const [activePatientId, setActivePatientId] = useState<string>('');
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [contacts, setContacts] = useState<ContactItem[]>(INITIAL_CONTACTS);
 
   // Active Modals & Dialogs State
@@ -110,24 +110,24 @@ export default function App() {
     caregiverPhone: userProfile.caregiverPhone
   } : null;
 
-  const DEFAULT_PATIENT: PatientProfile = {
-    id: 'KK-PAT-100',
-    name: 'KeenKeep Patient',
-    age: 70,
-    gender: 'Female',
-    bloodGroup: 'O+',
-    homeLocation: 'Bengaluru, Karnataka',
-    liveLocationEnabled: true,
-    dateOfBirth: '1955-01-01',
+  const EMPTY_PATIENT: PatientProfile = {
+    id: '',
+    name: '',
+    age: 0,
+    gender: '',
+    bloodGroup: '',
+    homeLocation: '',
+    liveLocationEnabled: false,
+    dateOfBirth: '',
     avatar: '',
     status: 'all_good',
-    streakDays: 1,
-    overallCompletion: 100,
-    caregiverId: 'CG-101'
+    streakDays: 0,
+    overallCompletion: 0,
+    caregiverId: ''
   };
 
-  const activePatient = userPatientProfile || patients.find((p) => p.id === activePatientId) || patients[0] || DEFAULT_PATIENT;
-  const activePatientTasks = tasks.filter((t) => t.patientId === activePatient.id);
+  const activePatient = userPatientProfile || patients.find((p) => p.id === activePatientId) || patients[0] || EMPTY_PATIENT;
+  const activePatientTasks = tasks.filter((t) => (t.patientId && activePatient.id && t.patientId.toUpperCase() === activePatient.id.toUpperCase()) || (t.patientUid && activePatient.uid && t.patientUid === activePatient.uid));
 
   // Global Firebase Auth State Listener
   useEffect(() => {
@@ -188,14 +188,24 @@ export default function App() {
     }
   }, [userProfile, userRole]);
 
-  // Subscribe to real-time store events
+  // Subscribe to real-time tasks from Firestore for the active patient
   useEffect(() => {
-    const unsubscribe = db.subscribe((event) => {
-      setPatients(db.getPatients());
-      setTasks(db.getTasks());
-    });
+    if (!activePatient || (!activePatient.id && !activePatient.uid)) {
+      setTasks([]);
+      return;
+    }
+
+    const targetId = activePatient.id || activePatient.uid || '';
+    const unsubscribe = taskService.subscribeToTasks(
+      targetId,
+      (realTasks) => {
+        setTasks(realTasks);
+      },
+      (err) => console.warn('Real-time task subscription notice:', err)
+    );
+
     return () => unsubscribe();
-  }, []);
+  }, [activePatient?.id, activePatient?.uid]);
 
   // Unread Emergency / High Priority Alerts Count
   const unreadAlertCount = patients.filter((p) => p.status === 'sos_alert').length;
@@ -481,6 +491,7 @@ export default function App() {
         isOpen={showFamilyConnectModal}
         onClose={() => setShowFamilyConnectModal(false)}
         onStartCall={(c) => setShowCallingModal(true)}
+        patientIdOrUid={activePatient.id}
       />
 
       {/* Smart Medication Tracker (Section 13) */}
@@ -628,6 +639,7 @@ export default function App() {
         onClose={() => setShowSchedulerModal(false)}
         tasks={activePatientTasks}
         activePatient={activePatient}
+        connectedPatients={patients}
         onAddTask={handleAddTask}
         onDeleteTask={handleDeleteTask}
         caregiverUid={currentUser?.uid}

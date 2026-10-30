@@ -351,47 +351,7 @@ export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   }
 ];
 
-export const INITIAL_CONTACTS: ContactItem[] = [
-  {
-    id: 'c-1',
-    name: 'Meera (Daughter)',
-    relationship: 'Daughter',
-    phone: '+91 98765 43210',
-    avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=300&q=80',
-    isQuickCall: true,
-    birthday: '12 Aug',
-    videoEnabled: true
-  },
-  {
-    id: 'c-2',
-    name: 'Rohit (Son)',
-    relationship: 'Son',
-    phone: '+91 98765 98765',
-    avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=300&q=80',
-    isQuickCall: true,
-    birthday: '24 Jan',
-    videoEnabled: true
-  },
-  {
-    id: 'c-3',
-    name: 'Sita (Wife)',
-    relationship: 'Wife',
-    phone: '+91 91234 56789',
-    avatar: 'https://images.unsplash.com/photo-1581579438747-1dc8d17bbce4?auto=format&fit=crop&w=300&q=80',
-    isQuickCall: true,
-    birthday: '15 Mar',
-    videoEnabled: true
-  },
-  {
-    id: 'c-4',
-    name: 'Dr. Suresh (Cardiologist)',
-    relationship: 'Primary Physician',
-    phone: '+91 99887 66554',
-    avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=300&q=80',
-    isQuickCall: true,
-    videoEnabled: true
-  }
-];
+export const INITIAL_CONTACTS: ContactItem[] = [];
 
 export const INITIAL_PROGRESS_7_DAYS: DayProgress[] = [
   { day: 'Mon', fullDate: '24 Oct', completionRate: 75, medsTaken: 3, medsTotal: 4, mood: 'good', sleepHours: 7.2, activitiesMinutes: 25 },

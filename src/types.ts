@@ -186,6 +186,9 @@ export interface AppNotification {
 
 export interface ContactItem {
   id: string;
+  patientId?: string;
+  patientUid?: string;
+  caregiverUid?: string;
   name: string;
   relationship?: string;
   relation?: string;

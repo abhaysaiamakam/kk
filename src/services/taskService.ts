@@ -3,9 +3,9 @@ import {
   doc, 
   onSnapshot, 
   query, 
-  where, 
   setDoc, 
-  updateDoc 
+  updateDoc,
+  serverTimestamp 
 } from 'firebase/firestore';
 import { firestore, handleFirestoreError, OperationType } from './firebase';
 import { TaskItem, TaskStatus } from '../types';
@@ -63,7 +63,7 @@ export const taskService = {
               completedTime: data.completedTime,
               patientConfirmation: data.patientConfirmation ?? false,
               patientConfirmed: data.patientConfirmed ?? false,
-              status: data.status || (data.completed ? 'completed' : 'upcoming'),
+              status: data.status || (data.completed ? 'completed' : 'pending'),
               voiceReminderText: data.voiceReminderText,
               dosage: data.dosage,
               notes: data.notes,
@@ -88,23 +88,29 @@ export const taskService = {
   },
 
   /**
-   * Save new task to Firestore
+   * Save new task to Firestore with serverTimestamp
    */
   async createTask(task: TaskItem): Promise<void> {
     const taskId = task.id || `task-${Date.now()}`;
     const path = `tasks/${taskId}`;
 
-    const payload: TaskItem = {
+    const payload: any = {
       ...task,
       id: taskId,
-      patientId: task.patientId.toUpperCase(),
-      status: task.status || 'upcoming'
+      patientId: (task.patientId || '').toUpperCase(),
+      patientUid: task.patientUid || '',
+      caregiverUid: task.caregiverUid || '',
+      status: task.status || 'pending',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
     };
 
     try {
       await setDoc(doc(firestore, 'tasks', taskId), payload);
+      console.log(`[TaskService] Successfully created task ${taskId} in Firestore.`);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
+      throw error;
     }
   },
 
@@ -115,13 +121,17 @@ export const taskService = {
     const path = `tasks/${taskId}`;
 
     try {
-      const payload: any = { ...updates };
+      const payload: any = { 
+        ...updates,
+        updatedAt: serverTimestamp()
+      };
       if (updates.patientId) {
         payload.patientId = updates.patientId.toUpperCase();
       }
       await updateDoc(doc(firestore, 'tasks', taskId), payload);
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
+      throw error;
     }
   },
 
@@ -139,10 +149,12 @@ export const taskService = {
         snoozed: status === 'snoozed',
         patientConfirmed: completed,
         patientConfirmation: completed,
+        updatedAt: serverTimestamp(),
         ...(completed ? { completedAt: new Date().toISOString(), completedTime: nowTime } : {})
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
+      throw error;
     }
   },
 
@@ -157,6 +169,30 @@ export const taskService = {
       await deleteDoc(doc(firestore, 'tasks', taskId));
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, path);
+      throw error;
     }
+  },
+
+  /**
+   * Helper to calculate display status from task properties
+   */
+  getCalculatedStatus(task: TaskItem): 'Pending' | 'In Progress' | 'Completed' | 'Overdue' {
+    if (task.completed || task.status === 'completed') {
+      return 'Completed';
+    }
+    if (task.status === 'in_progress' || task.snoozed) {
+      return 'In Progress';
+    }
+    if (task.status === 'missed') {
+      return 'Overdue';
+    }
+    // Check due date if available
+    if (task.dueDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (task.dueDate < today) {
+        return 'Overdue';
+      }
+    }
+    return 'Pending';
   }
 };
