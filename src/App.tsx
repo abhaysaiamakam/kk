@@ -38,9 +38,14 @@ import { FamilyConnectModal } from './components/FamilyConnectModal';
 import { SmartMedicationModal } from './components/SmartMedicationModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { AIVoiceCompanionModal } from './components/AIVoiceCompanionModal';
+import { auth, onAuthStateChanged, FirebaseUser, UserProfileDocument } from './services/firebase';
+import { authService } from './services/authService';
 
 export default function App() {
   // Navigation & Authentication State
+  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfileDocument | null>(null);
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>(null);
   const [language, setLanguage] = useState<Language>('en');
@@ -80,6 +85,45 @@ export default function App() {
   const activePatient = patients.find((p) => p.id === activePatientId) || patients[0];
   const activePatientTasks = tasks.filter((t) => t.patientId === activePatient.id);
 
+  // Global Firebase Auth State Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        setCurrentUser(firebaseUser);
+        setIsLoggedIn(true);
+
+        try {
+          const profile = await authService.getUserProfile(firebaseUser.uid);
+          if (profile) {
+            setUserProfile(profile);
+            setUserRole(profile.role);
+            if (profile.preferredLanguage) {
+              setLanguage(profile.preferredLanguage);
+            }
+            if (profile.fullName) {
+              setUserName(profile.fullName);
+            }
+            if (profile.patientId) {
+              setActivePatientId(profile.patientId);
+            }
+          } else {
+            setUserName(firebaseUser.displayName || 'MindCare User');
+          }
+        } catch (err) {
+          console.warn('Could not fetch Firestore user profile:', err);
+        }
+      } else {
+        setCurrentUser(null);
+        setUserProfile(null);
+        setIsLoggedIn(false);
+        setUserRole(null);
+      }
+      setIsAuthChecking(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Subscribe to real-time store events
   useEffect(() => {
     const unsubscribe = db.subscribe((event) => {
@@ -93,16 +137,30 @@ export default function App() {
   const unreadAlertCount = patients.filter((p) => p.status === 'sos_alert').length;
 
   // Handlers
-  const handleLogin = (name: string) => {
-    setUserName(name);
+  const handleLoginSuccess = (user: FirebaseUser, profile: UserProfileDocument) => {
+    setCurrentUser(user);
+    setUserProfile(profile);
     setIsLoggedIn(true);
+    setUserRole(profile.role);
+    setLanguage(profile.preferredLanguage);
+    setUserName(profile.fullName || user.displayName || 'MindCare User');
+    if (profile.patientId) {
+      setActivePatientId(profile.patientId);
+    }
   };
 
   const handleSelectRole = (role: UserRole) => {
     setUserRole(role);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await authService.signOut();
+    } catch (e) {
+      console.warn('Sign out warning:', e);
+    }
+    setCurrentUser(null);
+    setUserProfile(null);
     setIsLoggedIn(false);
     setUserRole(null);
   };
@@ -152,14 +210,29 @@ export default function App() {
     setContacts((prev) => [...prev, newContact]);
   };
 
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#F8F7F0] flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 rounded-3xl bg-[#A8C9B0] flex items-center justify-center shadow-lg text-[#2D4F3B] mb-4 animate-pulse">
+          <svg className="w-9 h-9" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M17.5,3 C17.5,3 15.2,5.3 14,8.5 C12.8,11.7 13.5,14 13.5,14 C13.5,14 11.2,13.3 8,14.5 C4.8,15.7 2.5,18 2.5,18 C2.5,18 4.8,20.3 8,19.1 C11.2,17.9 11.9,15.6 11.9,15.6 C11.9,15.6 14.2,16.3 17.4,15.1 C20.6,13.9 22.9,11.6 22.9,11.6 C22.9,11.6 20.6,9.3 17.4,10.5 C14.2,11.7 13.5,14 13.5,14 C13.5,14 14.2,11.7 15.4,8.5 C16.6,5.3 17.5,3 17.5,3 Z" />
+          </svg>
+        </div>
+        <h2 className="text-xl font-bold text-[#263238] font-['Poppins']">MindCare</h2>
+        <p className="text-xs text-[#3B664B] mt-1 font-medium">Connecting to secure health records...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8F7F0] text-[#263238] flex flex-col selection:bg-[#A8C9B0]/30 selection:text-[#263238]">
       
       {/* 1. Login View (Screen 1) */}
       {!isLoggedIn && (
         <LoginView
-          onLogin={handleLogin}
+          onLoginSuccess={handleLoginSuccess}
           language={language}
+          onLanguageChange={setLanguage}
         />
       )}
 
@@ -332,6 +405,7 @@ export default function App() {
         onUpdatePatient={handleUpdatePatient}
         language={language}
         onLanguageChange={setLanguage}
+        onLogout={handleLogout}
       />
 
       {/* Calling Screen & Simulator (Screen 8) */}

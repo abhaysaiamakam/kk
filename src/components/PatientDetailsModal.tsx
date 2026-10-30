@@ -21,6 +21,7 @@ interface PatientDetailsModalProps {
   onUpdatePatient: (updated: PatientProfile) => void;
   language: Language;
   onLanguageChange: (lang: Language) => void;
+  onLogout?: () => void;
 }
 
 export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
@@ -29,7 +30,8 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   onClose,
   onUpdatePatient,
   language,
-  onLanguageChange
+  onLanguageChange,
+  onLogout
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -270,7 +272,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
               </div>
 
               {/* Notifications */}
-              <div className="py-2.5 flex items-center justify-between last:pb-0">
+              <div className="py-2.5 flex items-center justify-between border-b border-gray-100 pb-3">
                 <div className="flex items-center space-x-3 text-gray-600">
                   <Bell className="w-4 h-4 text-[#4B7358]" />
                   <span>{t.notifications}</span>
@@ -289,6 +291,23 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                   />
                 </button>
               </div>
+
+              {/* Logout Option */}
+              {onLogout && (
+                <div className="pt-2.5 flex items-center justify-between">
+                  <span className="text-xs text-gray-500">MindCare Account</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onLogout();
+                    }}
+                    className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 

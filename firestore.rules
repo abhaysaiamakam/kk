@@ -1,0 +1,131 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Connectivity test collection
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // 1. Users collection
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.fullName is string && data.fullName.size() > 0 && data.fullName.size() <= 100 &&
+             data.email is string && data.email.size() <= 150 &&
+             data.role in ['patient', 'caregiver'] &&
+             data.preferredLanguage in ['en', 'kn', 'hi'] &&
+             data.isActive is bool;
+    }
+
+    match /users/{uid} {
+      allow get: if isOwner(uid);
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isOwner(uid) && isValidUser(incoming()) && incoming().uid == request.auth.uid;
+      allow update: if isOwner(uid) && isValidUser(incoming()) &&
+                       incoming().uid == existing().uid &&
+                       incoming().role == existing().role &&
+                       incoming().createdAt == existing().createdAt;
+      allow delete: if false;
+    }
+
+    // 2. Patients collection
+    function isValidPatient(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.caregiverId is string && data.caregiverId.size() <= 128;
+    }
+
+    match /patients/{patientId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidPatient(incoming());
+      allow update: if isSignedIn() && isValidPatient(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
+
+    // 3. Tasks / Medications collection
+    function isValidTask(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+             data.category in ['medicine', 'exercise', 'calm', 'meal', 'activity'];
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidTask(incoming());
+      allow update: if isSignedIn() && isValidTask(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
+
+    // 4. Activity Timeline
+    function isValidActivity(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.taskName is string && data.taskName.size() <= 150;
+    }
+
+    match /activities/{activityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidActivity(incoming());
+      allow update: if isSignedIn() && isValidActivity(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
+
+    // 5. Voice Notes
+    function isValidVoiceNote(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() <= 100 &&
+             data.senderRole in ['patient', 'caregiver'] &&
+             data.transcription is string && data.transcription.size() <= 1000;
+    }
+
+    match /voiceNotes/{voiceNoteId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidVoiceNote(incoming());
+      allow update: if isSignedIn() && isValidVoiceNote(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
+
+    // 6. SOS Alerts
+    function isValidAlert(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.status in ['active', 'resolved', 'escalated'];
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidAlert(incoming());
+      allow update: if isSignedIn() && isValidAlert(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
+  }
+}

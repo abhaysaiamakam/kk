@@ -1,0 +1,150 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with role-based access control for MindCare platform",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "username": { "type": "string", "maxLength": 50 },
+        "role": { "type": "string", "enum": ["patient", "caregiver"] },
+        "preferredLanguage": { "type": "string", "enum": ["en", "kn", "hi"] },
+        "photoURL": { "type": "string", "maxLength": 500 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      },
+      "required": ["uid", "fullName", "email", "role", "preferredLanguage", "createdAt", "isActive"]
+    },
+    "Patient": {
+      "title": "Patient",
+      "description": "Patient medical profile and caregiver linking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 100 },
+        "age": { "type": "number" },
+        "gender": { "type": "string", "maxLength": 20 },
+        "bloodGroup": { "type": "string", "maxLength": 10 },
+        "homeLocation": { "type": "string", "maxLength": 200 },
+        "liveLocationEnabled": { "type": "boolean" },
+        "dateOfBirth": { "type": "string", "maxLength": 30 },
+        "avatar": { "type": "string", "maxLength": 500 },
+        "status": { "type": "string", "enum": ["all_good", "meds_pending", "sos_alert"] },
+        "streakDays": { "type": "number" },
+        "overallCompletion": { "type": "number" },
+        "caregiverId": { "type": "string", "maxLength": 128 },
+        "caregiverIds": { "type": "array" },
+        "preferredLanguage": { "type": "string", "enum": ["en", "kn", "hi"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "name", "caregiverId"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Scheduled medication or wellness activity for a patient",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "maxLength": 150 },
+        "time": { "type": "string", "maxLength": 30 },
+        "category": { "type": "string", "enum": ["medicine", "exercise", "calm", "meal", "activity"] },
+        "completed": { "type": "boolean" },
+        "snoozed": { "type": "boolean" },
+        "missed": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["upcoming", "in_progress", "completed", "missed", "snoozed", "unconfirmed"] },
+        "dosage": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 300 },
+        "source": { "type": "string", "maxLength": 50 },
+        "createdBy": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string" },
+        "completedAt": { "type": "string" }
+      },
+      "required": ["id", "patientId", "title", "time", "category"]
+    },
+    "Activity": {
+      "title": "Activity",
+      "description": "Historical timeline activity item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "taskName": { "type": "string", "maxLength": 150 },
+        "category": { "type": "string", "maxLength": 50 },
+        "scheduledTime": { "type": "string", "maxLength": 30 },
+        "completedTime": { "type": "string", "maxLength": 30 },
+        "status": { "type": "string", "maxLength": 30 },
+        "patientConfirmed": { "type": "boolean" },
+        "source": { "type": "string", "maxLength": 50 },
+        "timestamp": { "type": "string", "maxLength": 50 }
+      },
+      "required": ["id", "patientId", "taskName", "status"]
+    },
+    "VoiceNote": {
+      "title": "VoiceNote",
+      "description": "Audio voice note communication between patient and caregiver",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "senderName": { "type": "string", "maxLength": 100 },
+        "senderRole": { "type": "string", "enum": ["patient", "caregiver"] },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "duration": { "type": "string", "maxLength": 20 },
+        "transcription": { "type": "string", "maxLength": 1000 },
+        "audioBlobUrl": { "type": "string", "maxLength": 500 }
+      },
+      "required": ["id", "patientId", "senderName", "senderRole", "transcription"]
+    },
+    "Alert": {
+      "title": "Alert",
+      "description": "Emergency SOS alert with geolocation and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "patientId": { "type": "string", "maxLength": 128 },
+        "patientName": { "type": "string", "maxLength": 100 },
+        "timestamp": { "type": "string", "maxLength": 50 },
+        "location": { "type": "string", "maxLength": 200 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "resolved", "escalated"] },
+        "hasVoiceNote": { "type": "boolean" },
+        "notes": { "type": "string", "maxLength": 300 }
+      },
+      "required": ["id", "patientId", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User account documents keyed by Firebase Auth UID"
+    },
+    "/patients/{patientId}": {
+      "schema": "Patient",
+      "description": "Patient medical profiles linked to caregivers"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Scheduled tasks and medication records"
+    },
+    "/activities/{activityId}": {
+      "schema": "Activity",
+      "description": "Timeline activity items"
+    },
+    "/voiceNotes/{voiceNoteId}": {
+      "schema": "VoiceNote",
+      "description": "Voice messaging notes"
+    },
+    "/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "SOS emergency alerts"
+    }
+  }
+}

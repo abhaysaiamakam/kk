@@ -80,6 +80,19 @@ export interface Translations {
   allGood: string;
   medsPending: string;
   sosAlert: string;
+  emailOrUsername: string;
+  password: string;
+  rememberMe: string;
+  forgotPassword: string;
+  signIn: string;
+  createAccount: string;
+  alreadyHaveAccount: string;
+  registerTitle: string;
+  fullName: string;
+  selectRole: string;
+  resetPassword: string;
+  sendResetEmail: string;
+  backToSignIn: string;
 }
 
 export const translations: Record<Language, Translations> = {
@@ -163,6 +176,19 @@ export const translations: Record<Language, Translations> = {
     allGood: 'All good',
     medsPending: 'Meds pending',
     sosAlert: 'SOS alert',
+    emailOrUsername: 'Email address or username',
+    password: 'Password',
+    rememberMe: 'Remember me',
+    forgotPassword: 'Forgot password?',
+    signIn: 'Sign in',
+    createAccount: 'Create an account',
+    alreadyHaveAccount: 'Already have an account? Sign in',
+    registerTitle: 'Create MindCare Account',
+    fullName: 'Full Name',
+    selectRole: 'Account Type',
+    resetPassword: 'Reset Password',
+    sendResetEmail: 'Send reset link',
+    backToSignIn: 'Back to sign in',
   },
   kn: {
     appName: 'ಮೈಂಡ್‌ಕೇರ್',
@@ -244,6 +270,19 @@ export const translations: Record<Language, Translations> = {
     allGood: 'ಎಲ್ಲವೂ ಸರಿ ಇದೆ',
     medsPending: 'ಔಷಧಿ ಬಾಕಿ ಇದೆ',
     sosAlert: 'ತುರ್ತು ಎಚ್ಚರಿಕೆ (SOS)',
+    emailOrUsername: 'ಇಮೇಲ್ ವಿಳಾಸ ಅಥವಾ ಬಳಕೆದಾರ ಹೆಸರು',
+    password: 'ಪಾಸ್‌ವರ್ಡ್',
+    rememberMe: 'ನನ್ನನ್ನು ನೆನಪಿನಲ್ಲಿಡಿ (Remember me)',
+    forgotPassword: 'ಪಾಸ್‌ವರ್ಡ್ ಮರೆತಿರಾ?',
+    signIn: 'ಸೈನ್ ಇನ್',
+    createAccount: 'ಹೊಸ ಖಾತೆ ರಚಿಸಿ',
+    alreadyHaveAccount: 'ಈಗಾಗಲೇ ಖಾತೆ ಹೊಂದಿದ್ದೀರಾ? ಸೈನ್ ಇನ್ ಮಾಡಿ',
+    registerTitle: 'ಮೈಂಡ್‌ಕೇರ್ ಖಾತೆ ರಚನೆ',
+    fullName: 'ಪೂರ್ಣ ಹೆಸರು',
+    selectRole: 'ಖಾತೆಯ ಪ್ರಕಾರ',
+    resetPassword: 'ಪಾಸ್‌ವರ್ಡ್ ಮರುಹೊಂದಿಸಿ',
+    sendResetEmail: 'ಮರುಹೊಂದಿಸುವ ಲಿಂಕ್ ಕಳುಹಿಸಿ',
+    backToSignIn: 'ಸೈನ್ ಇನ್‌ಗೆ ಹಿಂತಿರುಗಿ',
   },
   hi: {
     appName: 'माइंडकेयर',
@@ -325,5 +364,18 @@ export const translations: Record<Language, Translations> = {
     allGood: 'सब ठीक है',
     medsPending: 'दवा बाकी है',
     sosAlert: 'आपातकालीन अलर्ट (SOS)',
+    emailOrUsername: 'ईमेल या यूज़रनेम',
+    password: 'पासवर्ड',
+    rememberMe: 'मुझे याद रखें (Remember me)',
+    forgotPassword: 'पासवर्ड भूल गए?',
+    signIn: 'साइन इन करें',
+    createAccount: 'नया खाता बनाएं',
+    alreadyHaveAccount: 'पहले से खाता है? साइन इन करें',
+    registerTitle: 'माइंडकेयर खाता बनाएं',
+    fullName: 'पूरा नाम',
+    selectRole: 'खाते का प्रकार',
+    resetPassword: 'पासवर्ड रीसेट करें',
+    sendResetEmail: 'रीसेट लिंक भेजें',
+    backToSignIn: 'साइन इन पर वापस जाएं',
   }
 };
