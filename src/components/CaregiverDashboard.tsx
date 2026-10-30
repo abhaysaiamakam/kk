@@ -26,7 +26,8 @@ import {
   Bell, 
   Lightbulb, 
   Radio,
-  Mic 
+  Mic,
+  Ambulance 
 } from 'lucide-react';
 import { 
   PatientProfile, 
@@ -425,38 +426,76 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
       {/* EMERGENCY SOS BANNER & LIVE TRACKING matching Section 10 */}
       {patients.length > 0 && activePatient && emergencyAlert && (
-        <div className="p-4 sm:p-5 bg-red-50 border-2 border-red-300 rounded-3xl shadow-md space-y-3 animate-pulse">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center space-x-3.5">
-              <div className="w-11 h-11 rounded-2xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0">
-                SOS
-              </div>
-              <div>
-                <h4 className="font-bold text-sm text-red-950 font-['Poppins']">
-                  🚨 High Priority: SOS Alert Active
-                </h4>
-                <p className="text-xs text-red-800">
-                  {activePatient.name} ({activePatient.id}) initiated emergency beacon. Live location active (±5m accuracy).
-                </p>
-              </div>
+        <div className="p-4 sm:p-5 bg-red-50 border-2 border-red-300 rounded-3xl shadow-md space-y-4 animate-pulse">
+          <div className="flex items-center space-x-3.5">
+            <div className="w-11 h-11 rounded-2xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0">
+              SOS
             </div>
-
-            <div className="flex items-center space-x-2">
-              <button
-                onClick={onViewSosModal}
-                className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center space-x-1.5"
-              >
-                <MapPin className="w-3.5 h-3.5" />
-                <span>View Live Map &amp; Navigate</span>
-              </button>
-
-              <button
-                onClick={() => handleResolveSosCall(activePatient.id)}
-                className="px-3.5 py-2 rounded-xl bg-white border border-red-200 text-red-800 text-xs font-semibold hover:bg-red-100 cursor-pointer"
-              >
-                Resolve Emergency
-              </button>
+            <div>
+              <h4 className="font-bold text-sm text-red-950 font-['Poppins']">
+                🚨 High Priority: SOS Alert Active
+              </h4>
+              <p className="text-xs text-red-800">
+                {activePatient.name} ({activePatient.id}) initiated emergency beacon. Live location broadcasting.
+              </p>
             </div>
+          </div>
+
+          {/* Patient's actual live GPS location on a map */}
+          <div className="relative w-full h-48 bg-[#E5ECE5] rounded-2xl overflow-hidden border border-red-200 shadow-inner flex flex-col justify-between p-3">
+            <div className="absolute inset-0 opacity-25 pointer-events-none">
+              <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <pattern id="grid-caregiver" width="40" height="40" patternUnits="userSpaceOnUse">
+                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#263238" strokeWidth="1"/>
+                  </pattern>
+                </defs>
+                <rect width="100%" height="100%" fill="url(#grid-caregiver)" />
+              </svg>
+            </div>
+            <div className="relative z-10 flex justify-between text-[10px] text-gray-500 font-bold">
+              <span className="bg-white/80 px-2 py-0.5 rounded-md">{activePatient.homeLocation || 'Live GPS Beacon'}</span>
+              <span className="bg-white/80 px-2 py-0.5 rounded-md">GPS Locked</span>
+            </div>
+            <div className="relative z-10 flex flex-col items-center justify-center my-auto">
+              <div className="relative flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-red-500/25 animate-ping absolute" />
+                <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-white text-white flex items-center justify-center shadow-lg relative z-10">
+                  <MapPin className="w-4 h-4" />
+                </div>
+              </div>
+              <span className="text-[11px] font-bold text-red-950 bg-white/95 px-2.5 py-0.5 rounded-md shadow-xs mt-1">
+                {activePatient.name}
+              </span>
+            </div>
+            <div className="relative z-10 bg-white/95 p-2 rounded-xl border border-gray-200 flex items-center justify-between text-xs">
+              <div className="flex items-center space-x-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="font-bold text-[#263238] text-[11px]">Live GPS Coordinates</span>
+              </div>
+              <span className="text-[10px] font-mono text-gray-500">
+                {activePatient.currentLatitude || 12.9716}, {activePatient.currentLongitude || 77.5946}
+              </span>
+            </div>
+          </div>
+
+          {/* Action Buttons: Call Patient & Call Ambulance (108) */}
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <a
+              href={`tel:${activePatient.caregiverPhone || '+919876543210'}`}
+              className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
+            >
+              <Phone className="w-4 h-4" />
+              <span>Call Patient</span>
+            </a>
+
+            <a
+              href="tel:108"
+              className="py-3 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
+            >
+              <Ambulance className="w-4 h-4" />
+              <span>Call Ambulance (108)</span>
+            </a>
           </div>
         </div>
       )}

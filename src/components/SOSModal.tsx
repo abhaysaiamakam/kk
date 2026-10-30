@@ -227,24 +227,22 @@ export const SOSModal: React.FC<SOSModalProps> = ({
 
               </div>
 
-              {/* Action Buttons matching Section 5 & 10 */}
+              {/* Action Buttons: Call Caregiver & Call Ambulance (108) */}
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <a
-                  href={`tel:+919876543210`}
-                  className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs"
+                  href={`tel:${patient.caregiverPhone || '+919876543210'}`}
+                  className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
                 >
                   <Phone className="w-4 h-4" />
                   <span>Call Caregiver</span>
                 </a>
 
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${liveCoords.lat},${liveCoords.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="py-3 px-3 rounded-2xl bg-[#D8EAF5] hover:bg-[#BEE0F5] text-[#1E4D6B] font-bold text-xs flex items-center justify-center space-x-2 shadow-xs"
+                  href="tel:108"
+                  className="py-3 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
                 >
-                  <Navigation className="w-4 h-4" />
-                  <span>Navigate</span>
+                  <Ambulance className="w-4 h-4" />
+                  <span>Call Ambulance (108)</span>
                 </a>
               </div>
 
