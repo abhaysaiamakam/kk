@@ -213,9 +213,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         <h1 className="text-2xl sm:text-3xl font-bold text-[#263238] font-['Poppins'] flex items-center space-x-2">
           <span>Good morning, {(patient?.name || 'Patient').split(' ')[0]}!</span>
         </h1>
-        <p className="text-sm font-medium text-[#4B7358] mt-0.5">
-          {t.takeSmallSteps}
-        </p>
       </div>
 
       {/* Patient Info Card matching Section 2 */}

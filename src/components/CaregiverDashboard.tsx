@@ -354,9 +354,6 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               </span>
             )}
           </div>
-          <p className="text-xs sm:text-sm text-gray-500 mt-1">
-            Real-time synchronization active with enrolled patient devices.
-          </p>
         </div>
 
         {/* Patient Switcher & Action Controls */}

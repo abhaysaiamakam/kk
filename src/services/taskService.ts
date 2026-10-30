@@ -94,7 +94,7 @@ export const taskService = {
     const taskId = task.id || `task-${Date.now()}`;
     const path = `tasks/${taskId}`;
 
-    const payload: any = {
+    const rawPayload: any = {
       ...task,
       id: taskId,
       patientId: (task.patientId || '').toUpperCase(),
@@ -104,6 +104,13 @@ export const taskService = {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
+
+    const payload: any = {};
+    for (const [key, value] of Object.entries(rawPayload)) {
+      if (value !== undefined) {
+        payload[key] = value;
+      }
+    }
 
     try {
       await setDoc(doc(firestore, 'tasks', taskId), payload);
@@ -121,12 +128,18 @@ export const taskService = {
     const path = `tasks/${taskId}`;
 
     try {
-      const payload: any = { 
+      const rawPayload: any = { 
         ...updates,
         updatedAt: serverTimestamp()
       };
       if (updates.patientId) {
-        payload.patientId = updates.patientId.toUpperCase();
+        rawPayload.patientId = updates.patientId.toUpperCase();
+      }
+      const payload: any = {};
+      for (const [key, value] of Object.entries(rawPayload)) {
+        if (value !== undefined) {
+          payload[key] = value;
+        }
       }
       await updateDoc(doc(firestore, 'tasks', taskId), payload);
     } catch (error) {
