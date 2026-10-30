@@ -190,6 +190,8 @@ export interface PatientProfile {
   streakDays: number;
   overallCompletion: number;
   caregiverId: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
   adaptiveNotes?: string;
 }
 

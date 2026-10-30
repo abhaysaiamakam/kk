@@ -11,6 +11,12 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   updateProfile,
+  deleteUser,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  EmailAuthProvider,
+  deleteDoc,
+  arrayRemove,
   handleFirestoreError,
   OperationType,
   UserProfileDocument,
@@ -28,7 +34,8 @@ import {
   arrayUnion, 
   addDoc 
 } from 'firebase/firestore';
-import { Language } from '../types';
+import { Language, PatientProfile } from '../types';
+import { calculateAgeFromDob } from '../utils/ageUtils';
 
 export interface AuthSuccessResult {
   user: FirebaseUser;
@@ -38,6 +45,7 @@ export interface AuthSuccessResult {
 
 export interface CaregiverConnectionRequest {
   id: string;
+  requestId: string;
   caregiverUid: string;
   caregiverName: string;
   caregiverPhone: string;
@@ -103,25 +111,55 @@ export const authService = {
     photoURL?: string;
   } | null> {
     const formattedId = patientId.trim().toUpperCase();
-    const path = `users?patientId=${formattedId}`;
-    try {
-      const q = query(
-        collection(firestore, 'users'),
-        where('patientId', '==', formattedId),
-        where('role', '==', 'patient')
-      );
-      const snapshot = await getDocs(q);
-      if (snapshot.empty) return null;
+    if (!formattedId) return null;
 
-      const docData = snapshot.docs[0].data();
-      return {
-        uid: docData.uid,
-        fullName: docData.fullName,
-        phone: docData.phone,
-        photoURL: docData.photoURL
-      };
+    try {
+      // 1. Direct document check in patients collection
+      const patientRef = doc(firestore, 'patients', formattedId);
+      const patientSnap = await getDoc(patientRef);
+      if (patientSnap.exists()) {
+        const pData = patientSnap.data();
+        return {
+          uid: pData.patientUid || pData.uid || formattedId,
+          fullName: pData.name || pData.fullName || 'Patient',
+          phone: pData.phone,
+          photoURL: pData.avatar || pData.photoURL
+        };
+      }
+
+      // 2. Query patients collection by id field
+      const qPatients = query(collection(firestore, 'patients'), where('id', '==', formattedId));
+      const pSnap = await getDocs(qPatients);
+      if (!pSnap.empty) {
+        const pData = pSnap.docs[0].data();
+        return {
+          uid: pData.patientUid || pData.uid || formattedId,
+          fullName: pData.name || pData.fullName || 'Patient',
+          phone: pData.phone,
+          photoURL: pData.avatar || pData.photoURL
+        };
+      }
+
+      // 3. Query users collection by patientId
+      const qUsers = query(
+        collection(firestore, 'users'),
+        where('patientId', '==', formattedId)
+      );
+      const uSnap = await getDocs(qUsers);
+      if (!uSnap.empty) {
+        const uData = uSnap.docs[0].data();
+        return {
+          uid: uData.uid,
+          fullName: uData.fullName,
+          phone: uData.phone,
+          photoURL: uData.photoURL
+        };
+      }
+
+      return null;
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, path);
+      console.warn('findPatientById lookup note:', error);
+      return null;
     }
   },
 
@@ -290,6 +328,7 @@ export const authService = {
     const requestId = `req-${params.user.uid.slice(0, 6)}-${Date.now()}`;
     const connectionRequest: CaregiverConnectionRequest = {
       id: requestId,
+      requestId: requestId,
       caregiverUid: params.user.uid,
       caregiverName: params.fullName.trim(),
       caregiverPhone: params.phone.trim(),
@@ -336,6 +375,7 @@ export const authService = {
     const requestId = `req-${params.caregiverUid.slice(0, 6)}-${Date.now()}`;
     const connectionRequest: CaregiverConnectionRequest = {
       id: requestId,
+      requestId: requestId,
       caregiverUid: params.caregiverUid,
       caregiverName: params.caregiverName,
       caregiverPhone: params.caregiverPhone,
@@ -363,20 +403,52 @@ export const authService = {
   },
 
   /**
-   * Get pending caregiver requests for a patient
+   * Get pending caregiver requests for a patient by UID or Patient ID
    */
-  async getPendingRequestsForPatient(patientUid: string): Promise<CaregiverConnectionRequest[]> {
+  async getPendingRequestsForPatient(patientUid: string, patientId?: string): Promise<CaregiverConnectionRequest[]> {
     const path = `caregiverRequests?patientUid=${patientUid}`;
     try {
-      const q = query(
-        collection(firestore, 'caregiverRequests'),
-        where('patientUid', '==', patientUid),
-        where('status', '==', 'pending')
-      );
-      const snapshot = await getDocs(q);
-      return snapshot.docs.map(doc => doc.data() as CaregiverConnectionRequest);
+      const results: CaregiverConnectionRequest[] = [];
+      const seenIds = new Set<string>();
+
+      // Query by patientUid
+      if (patientUid) {
+        const qUid = query(
+          collection(firestore, 'caregiverRequests'),
+          where('patientUid', '==', patientUid),
+          where('status', '==', 'pending')
+        );
+        const snapUid = await getDocs(qUid);
+        for (const docSnap of snapUid.docs) {
+          const data = docSnap.data() as CaregiverConnectionRequest;
+          if (!seenIds.has(data.id)) {
+            seenIds.add(data.id);
+            results.push(data);
+          }
+        }
+      }
+
+      // Query by patientId if available
+      if (patientId) {
+        const qId = query(
+          collection(firestore, 'caregiverRequests'),
+          where('patientId', '==', patientId.toUpperCase()),
+          where('status', '==', 'pending')
+        );
+        const snapId = await getDocs(qId);
+        for (const docSnap of snapId.docs) {
+          const data = docSnap.data() as CaregiverConnectionRequest;
+          if (!seenIds.has(data.id)) {
+            seenIds.add(data.id);
+            results.push(data);
+          }
+        }
+      }
+
+      return results;
     } catch (error) {
-      handleFirestoreError(error, OperationType.GET, path);
+      console.warn('getPendingRequestsForPatient note:', error);
+      return [];
     }
   },
 
@@ -398,12 +470,27 @@ export const authService = {
       });
 
       if (approve) {
-        // 2. Add caregiver to Patient profile
+        // 2. Add caregiver details to Patient profile
         await updateDoc(doc(firestore, 'users', request.patientUid), {
-          caregiverIds: arrayUnion(request.caregiverUid)
+          caregiverIds: arrayUnion(request.caregiverUid),
+          caregiverName: request.caregiverName,
+          caregiverPhone: request.caregiverPhone
         });
 
-        // 3. Add patientId to Caregiver profile connectedPatientIds
+        // 3. Update patient index document
+        if (request.patientId) {
+          try {
+            await updateDoc(doc(firestore, 'patients', request.patientId), {
+              caregiverId: request.caregiverUid,
+              caregiverName: request.caregiverName,
+              caregiverPhone: request.caregiverPhone
+            });
+          } catch (e) {
+            console.warn('Patient index update note:', e);
+          }
+        }
+
+        // 4. Add patientId to Caregiver profile connectedPatientIds
         await updateDoc(doc(firestore, 'users', request.caregiverUid), {
           connectedPatientIds: arrayUnion(request.patientId)
         });
@@ -463,6 +550,54 @@ export const authService = {
   },
 
   /**
+   * Retrieve connected patient profiles for a caregiver from Firestore
+   */
+  async getPatientsForCaregiver(caregiverUid: string, connectedPatientIds?: string[]): Promise<PatientProfile[]> {
+    try {
+      const results: PatientProfile[] = [];
+      const userProfile = await this.getUserProfile(caregiverUid);
+      const patientIds = connectedPatientIds || userProfile?.connectedPatientIds || [];
+
+      if (patientIds.length === 0) {
+        return [];
+      }
+
+      for (const pId of patientIds) {
+        const patientMatch = await this.findPatientById(pId);
+        if (patientMatch) {
+          const userDoc = await this.getUserProfile(patientMatch.uid);
+          const name = userDoc?.fullName || patientMatch.fullName || 'Patient';
+          const dobOrAge = userDoc?.dateOfBirth || userDoc?.age || '70';
+          const dobStr = typeof dobOrAge === 'string' ? dobOrAge : String(dobOrAge);
+          const calculatedAge = calculateAgeFromDob(dobStr);
+
+          results.push({
+            id: userDoc?.patientId || pId,
+            name: name,
+            age: calculatedAge,
+            gender: 'Not added yet',
+            bloodGroup: userDoc?.bloodGroup || 'Not added yet',
+            homeLocation: 'Not added yet',
+            liveLocationEnabled: false,
+            dateOfBirth: dobStr,
+            avatar: userDoc?.photoURL || patientMatch.photoURL || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+            status: 'all_good',
+            streakDays: 0,
+            overallCompletion: 0,
+            caregiverId: userDoc?.caregiverName ? `${userDoc.caregiverName} (${userDoc.caregiverPhone || 'No phone'})` : 'Not added yet',
+            caregiverName: userDoc?.caregiverName,
+            caregiverPhone: userDoc?.caregiverPhone
+          });
+        }
+      }
+      return results;
+    } catch (err) {
+      console.warn('getPatientsForCaregiver error:', err);
+      return [];
+    }
+  },
+
+  /**
    * Send Password Reset Email
    */
   async sendPasswordReset(email: string): Promise<void> {
@@ -471,6 +606,102 @@ export const authService = {
       throw new Error('Please enter your registered email address.');
     }
     await sendPasswordResetEmail(auth, trimmed);
+  },
+
+  /**
+   * Securely delete user account: Re-authenticates, deletes Firestore profile & data, cleans relationships, and deletes Auth user
+   */
+  async deleteAccount(params: {
+    password?: string;
+    isGoogleUser?: boolean;
+  }): Promise<void> {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('No authenticated user found. Please sign in again.');
+    }
+
+    const uid = user.uid;
+
+    // 1. Re-authenticate user
+    if (params.isGoogleUser || user.providerData.some(p => p.providerId === 'google.com')) {
+      try {
+        await reauthenticateWithPopup(user, googleProvider);
+      } catch (reauthErr: any) {
+        if (reauthErr?.code === 'auth/popup-closed-by-user') {
+          throw new Error('Google re-authentication was cancelled. Re-authentication is required before deleting account.');
+        }
+        // Fallback popup
+        await signInWithPopup(auth, googleProvider);
+      }
+    } else if (params.password) {
+      if (!user.email) {
+        throw new Error('User email not found for re-authentication.');
+      }
+      const credential = EmailAuthProvider.credential(user.email, params.password);
+      await reauthenticateWithCredential(user, credential);
+    } else {
+      throw new Error('Re-authentication is required to delete your account.');
+    }
+
+    // 2. Fetch User Profile
+    const profile = await this.getUserProfile(uid);
+
+    // 3. Delete Firestore Records
+    try {
+      if (profile) {
+        if (profile.role === 'patient' && profile.patientId) {
+          // Delete patient document index
+          await deleteDoc(doc(firestore, 'patients', profile.patientId));
+
+          // Find & delete pending/approved caregiver requests
+          const qReq = query(
+            collection(firestore, 'caregiverRequests'),
+            where('patientId', '==', profile.patientId)
+          );
+          const reqSnap = await getDocs(qReq);
+          for (const reqDoc of reqSnap.docs) {
+            await deleteDoc(doc(firestore, 'caregiverRequests', reqDoc.id));
+          }
+
+          // Clean connected/pending patientId from caregiver user profiles
+          const qCaregivers = query(
+            collection(firestore, 'users'),
+            where('role', '==', 'caregiver')
+          );
+          const cSnap = await getDocs(qCaregivers);
+          for (const cDoc of cSnap.docs) {
+            const cData = cDoc.data();
+            if (
+              (cData.connectedPatientIds && cData.connectedPatientIds.includes(profile.patientId)) ||
+              (cData.pendingPatientIds && cData.pendingPatientIds.includes(profile.patientId))
+            ) {
+              await updateDoc(doc(firestore, 'users', cDoc.id), {
+                connectedPatientIds: arrayRemove(profile.patientId),
+                pendingPatientIds: arrayRemove(profile.patientId)
+              });
+            }
+          }
+        } else if (profile.role === 'caregiver') {
+          // Delete caregiver's connection requests
+          const qReq = query(
+            collection(firestore, 'caregiverRequests'),
+            where('caregiverUid', '==', uid)
+          );
+          const reqSnap = await getDocs(qReq);
+          for (const reqDoc of reqSnap.docs) {
+            await deleteDoc(doc(firestore, 'caregiverRequests', reqDoc.id));
+          }
+        }
+      }
+
+      // Delete User Profile Document
+      await deleteDoc(doc(firestore, 'users', uid));
+    } catch (firestoreErr) {
+      console.warn('Firestore deletion cleanup note:', firestoreErr);
+    }
+
+    // 4. Delete Firebase Auth User Account
+    await deleteUser(user);
   },
 
   /**

@@ -2,6 +2,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   getAuth, 
   GoogleAuthProvider, 
+  EmailAuthProvider,
   signInWithPopup,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -12,6 +13,9 @@ import {
   browserSessionPersistence,
   onAuthStateChanged,
   updateProfile,
+  deleteUser,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
   User as FirebaseUser
 } from 'firebase/auth';
 import { 
@@ -27,6 +31,7 @@ import {
   onSnapshot, 
   getDocFromServer,
   deleteDoc,
+  arrayRemove,
   serverTimestamp
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -146,5 +151,11 @@ export {
   browserSessionPersistence,
   onAuthStateChanged,
   updateProfile,
+  deleteUser,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  EmailAuthProvider,
+  deleteDoc,
+  arrayRemove,
   type FirebaseUser
 };

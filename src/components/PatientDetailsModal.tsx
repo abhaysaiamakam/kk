@@ -16,6 +16,7 @@ import { PatientProfile, Language } from '../types';
 import { translations } from '../data/translations';
 import { UserAvatar } from './UserAvatar';
 import { ImageUploader } from './ImageUploader';
+import { calculateAgeFromDob } from '../utils/ageUtils';
 
 interface PatientDetailsModalProps {
   patient: PatientProfile;
@@ -25,6 +26,7 @@ interface PatientDetailsModalProps {
   language: Language;
   onLanguageChange: (lang: Language) => void;
   onLogout?: () => void;
+  onOpenDeleteAccount?: () => void;
 }
 
 export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
@@ -34,7 +36,8 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   onUpdatePatient,
   language,
   onLanguageChange,
-  onLogout
+  onLogout,
+  onOpenDeleteAccount
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -236,11 +239,11 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                 </button>
               </div>
 
-              {/* Date of Birth */}
-              <div className="py-2.5 flex items-center justify-between last:pb-0">
+              {/* Date of Birth & Exact Age */}
+              <div className="py-2.5 flex items-center justify-between">
                 <div className="flex items-center space-x-3 text-gray-600">
                   <Calendar className="w-4 h-4 text-[#4B7358]" />
-                  <span>Date of Birth</span>
+                  <span>Date of Birth / Age</span>
                 </div>
                 {isEditing ? (
                   <input
@@ -250,7 +253,51 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                     className="text-right text-sm font-semibold bg-white px-2 py-1 rounded-lg border border-gray-300"
                   />
                 ) : (
-                  <span className="font-semibold text-[#263238]">{formData.dateOfBirth}</span>
+                  <span className="font-semibold text-[#263238]">
+                    {formData.dateOfBirth} ({calculateAgeFromDob(formData.dateOfBirth || formData.age)} yrs)
+                  </span>
+                )}
+              </div>
+
+              {/* Caregiver Name */}
+              <div className="py-2.5 flex items-center justify-between">
+                <div className="flex items-center space-x-3 text-gray-600">
+                  <User className="w-4 h-4 text-[#4B7358]" />
+                  <span>Connected Caregiver</span>
+                </div>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={formData.caregiverName || ''}
+                    onChange={(e) => setFormData({ ...formData, caregiverName: e.target.value })}
+                    className="text-right text-sm font-semibold bg-white px-2 py-1 rounded-lg border border-gray-300"
+                    placeholder="Caregiver Name"
+                  />
+                ) : (
+                  <span className="font-semibold text-[#263238]">
+                    {formData.caregiverName || patient.caregiverName || 'Not linked'}
+                  </span>
+                )}
+              </div>
+
+              {/* Caregiver Phone */}
+              <div className="py-2.5 flex items-center justify-between last:pb-0">
+                <div className="flex items-center space-x-3 text-gray-600">
+                  <Phone className="w-4 h-4 text-[#4B7358]" />
+                  <span>Caregiver Phone</span>
+                </div>
+                {isEditing ? (
+                  <input
+                    type="tel"
+                    value={formData.caregiverPhone || ''}
+                    onChange={(e) => setFormData({ ...formData, caregiverPhone: e.target.value })}
+                    className="text-right text-sm font-semibold bg-white px-2 py-1 rounded-lg border border-gray-300"
+                    placeholder="Caregiver Phone"
+                  />
+                ) : (
+                  <span className="font-semibold text-[#263238]">
+                    {formData.caregiverPhone || patient.caregiverPhone || 'Not linked'}
+                  </span>
                 )}
               </div>
 
@@ -308,22 +355,36 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                 </button>
               </div>
 
-              {/* Logout Option */}
-              {onLogout && (
-                <div className="pt-2.5 flex items-center justify-between">
-                  <span className="text-xs text-gray-500">MindCare Account</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onClose();
-                      onLogout();
-                    }}
-                    className="text-xs font-semibold text-red-600 hover:text-red-700 hover:underline cursor-pointer"
-                  >
-                    Sign Out
-                  </button>
+              {/* Account Actions */}
+              <div className="pt-2.5 flex items-center justify-between">
+                <span className="text-xs text-gray-500">KeenKeep Account</span>
+                <div className="flex items-center space-x-3">
+                  {onLogout && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onLogout();
+                      }}
+                      className="text-xs font-semibold text-gray-700 hover:text-black hover:underline cursor-pointer"
+                    >
+                      Sign Out
+                    </button>
+                  )}
+                  {onOpenDeleteAccount && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onClose();
+                        onOpenDeleteAccount();
+                      }}
+                      className="text-xs font-semibold text-red-600 hover:text-red-800 hover:underline cursor-pointer"
+                    >
+                      Delete Account
+                    </button>
+                  )}
                 </div>
-              )}
+              </div>
             </div>
           </div>
 

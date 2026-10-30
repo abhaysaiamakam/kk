@@ -32,6 +32,7 @@ import { translations } from '../data/translations';
 import { speakText, playChime } from '../utils/audio';
 import { UserAvatar } from './UserAvatar';
 import { authService, CaregiverConnectionRequest } from '../services/authService';
+import { calculateAgeFromDob } from '../utils/ageUtils';
 
 interface PatientDashboardProps {
   patient: PatientProfile;
@@ -246,8 +247,13 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </button>
             </div>
             <p className="text-xs font-semibold text-gray-600 mt-0.5">
-              {t.age}: {patient.age} | {t.bloodGroup}: <span className="text-red-700 font-bold">{patient.bloodGroup}</span>
+              {t.age}: {calculateAgeFromDob(patient.dateOfBirth || patient.age)} | {t.bloodGroup}: <span className="text-red-700 font-bold">{patient.bloodGroup}</span>
             </p>
+            {patient.caregiverName && patient.caregiverName !== 'Not added yet' && (
+              <p className="text-[11px] font-medium text-[#2D4F3B] mt-1 bg-white/80 px-2 py-0.5 rounded-md inline-block border border-gray-200">
+                Caregiver: <strong className="text-[#263238]">{patient.caregiverName}</strong> {patient.caregiverPhone && patient.caregiverPhone !== 'Not added yet' ? `(${patient.caregiverPhone})` : ''}
+              </p>
+            )}
           </div>
         </div>
 

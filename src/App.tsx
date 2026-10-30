@@ -40,8 +40,10 @@ import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { AIVoiceCompanionModal } from './components/AIVoiceCompanionModal';
 import { PatientRegistrationPage } from './components/PatientRegistrationPage';
 import { CaregiverRegistrationPage } from './components/CaregiverRegistrationPage';
+import { DeleteAccountModal } from './components/DeleteAccountModal';
 import { auth, onAuthStateChanged, FirebaseUser, UserProfileDocument } from './services/firebase';
 import { authService } from './services/authService';
+import { calculateAgeFromDob } from './utils/ageUtils';
 
 export default function App() {
   // Navigation & Authentication State
@@ -83,12 +85,13 @@ export default function App() {
   const [showSmartMedicationModal, setShowSmartMedicationModal] = useState(false);
   const [showNotificationCenterModal, setShowNotificationCenterModal] = useState(false);
   const [showVoiceCompanionModal, setShowVoiceCompanionModal] = useState(false);
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
 
   // Active patient object - if user is patient, construct from their real Firestore profile
   const userPatientProfile: PatientProfile | null = userProfile && userRole === 'patient' ? {
     id: userProfile.patientId || `P-${userProfile.uid.slice(0, 6).toUpperCase()}`,
     name: userProfile.fullName || 'Patient',
-    age: typeof userProfile.age === 'number' ? userProfile.age : (parseInt(userProfile.age || '70') || 70),
+    age: calculateAgeFromDob(userProfile.dateOfBirth || userProfile.age),
     gender: 'Not added yet',
     bloodGroup: userProfile.bloodGroup || 'Not added yet',
     homeLocation: 'Not added yet',
@@ -98,7 +101,9 @@ export default function App() {
     status: 'all_good',
     streakDays: 0,
     overallCompletion: 0,
-    caregiverId: 'Not added yet'
+    caregiverId: userProfile.caregiverName ? `${userProfile.caregiverName} (${userProfile.caregiverPhone || 'No phone'})` : 'Not added yet',
+    caregiverName: userProfile.caregiverName,
+    caregiverPhone: userProfile.caregiverPhone
   } : null;
 
   const DEFAULT_PATIENT: PatientProfile = {
@@ -158,6 +163,20 @@ export default function App() {
 
     return () => unsubscribe();
   }, []);
+
+  // Fetch real connected patient profiles from Firestore if logged in as a caregiver
+  useEffect(() => {
+    if (userProfile && userRole === 'caregiver' && userProfile.uid) {
+      authService.getPatientsForCaregiver(userProfile.uid, userProfile.connectedPatientIds)
+        .then((realPatients) => {
+          if (realPatients.length > 0) {
+            setPatients(realPatients);
+            setActivePatientId(realPatients[0].id);
+          }
+        })
+        .catch((err) => console.warn('Could not load caregiver connected patients:', err));
+    }
+  }, [userProfile, userRole]);
 
   // Subscribe to real-time store events
   useEffect(() => {
@@ -477,6 +496,19 @@ export default function App() {
         language={language}
         onLanguageChange={setLanguage}
         onLogout={handleLogout}
+        onOpenDeleteAccount={() => setShowDeleteAccountModal(true)}
+      />
+
+      {/* Delete Account Modal */}
+      <DeleteAccountModal
+        isOpen={showDeleteAccountModal}
+        onClose={() => setShowDeleteAccountModal(false)}
+        userRole={userRole}
+        userName={userName}
+        onAccountDeleted={() => {
+          setShowDeleteAccountModal(false);
+          handleLogout();
+        }}
       />
 
       {/* Calling Screen & Simulator (Screen 8) */}

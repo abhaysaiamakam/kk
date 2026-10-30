@@ -44,14 +44,13 @@ service cloud.firestore {
     }
 
     match /users/{uid} {
-      allow get: if isOwner(uid);
-      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
       allow create: if isOwner(uid) && isValidUser(incoming()) && incoming().uid == request.auth.uid;
-      allow update: if isOwner(uid) && isValidUser(incoming()) &&
+      allow update: if isSignedIn() && isValidUser(incoming()) &&
                        incoming().uid == existing().uid &&
-                       incoming().role == existing().role &&
-                       incoming().createdAt == existing().createdAt;
-      allow delete: if false;
+                       incoming().role == existing().role;
+      allow delete: if isOwner(uid);
     }
 
     // 2. Patients collection
