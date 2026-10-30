@@ -541,6 +541,10 @@ export default function App() {
         contacts={contacts}
         language={language}
         onAddContact={handleAddContact}
+        currentUserUid={currentUser?.uid}
+        currentUserName={userName}
+        currentUserRole={userRole}
+        activePatient={activePatient}
       />
 
       {/* SOS Emergency Flow with Live Location Tracking (Sections 5 & 10) */}
@@ -626,6 +630,8 @@ export default function App() {
         activePatient={activePatient}
         onAddTask={handleAddTask}
         onDeleteTask={handleDeleteTask}
+        caregiverUid={currentUser?.uid}
+        caregiverName={userName}
       />
 
       {/* Meetings & Visits */}

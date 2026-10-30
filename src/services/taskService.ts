@@ -28,8 +28,7 @@ export const taskService = {
     console.log(`[TaskService] Subscribing to real-time tasks/medications for patientId: "${formattedId}"`);
 
     const q = query(
-      collection(firestore, 'tasks'),
-      where('patientId', '==', formattedId)
+      collection(firestore, 'tasks')
     );
 
     const unsubscribe = onSnapshot(
@@ -38,25 +37,42 @@ export const taskService = {
         const list: TaskItem[] = [];
         snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data();
-          list.push({
-            id: data.id || docSnap.id,
-            patientId: data.patientId || formattedId,
-            title: data.title || 'Scheduled Task',
-            time: data.time || 'Today',
-            category: data.category || 'medicine',
-            completed: data.completed ?? false,
-            snoozed: data.snoozed ?? false,
-            missed: data.missed ?? false,
-            completedAt: data.completedAt,
-            completedTime: data.completedTime,
-            patientConfirmation: data.patientConfirmation ?? false,
-            patientConfirmed: data.patientConfirmed ?? false,
-            status: data.status || (data.completed ? 'completed' : 'upcoming'),
-            voiceReminderText: data.voiceReminderText,
-            dosage: data.dosage,
-            notes: data.notes,
-            source: data.source || 'caregiver'
-          });
+          const docPatientId = (data.patientId || '').toString().trim().toUpperCase();
+          const docPatientUid = (data.patientUid || '').toString().trim();
+
+          // Check if matches patientId or patientUid
+          if (docPatientId === formattedId || docPatientUid === patientId || docPatientId === patientId.toUpperCase()) {
+            list.push({
+              id: data.id || docSnap.id,
+              patientId: data.patientId || formattedId,
+              patientUid: data.patientUid,
+              caregiverUid: data.caregiverUid,
+              assignedBy: data.assignedBy,
+              assignedByName: data.assignedByName,
+              title: data.title || 'Scheduled Task',
+              description: data.description,
+              time: data.time || 'Today',
+              dueDate: data.dueDate,
+              dueTime: data.dueTime,
+              priority: data.priority || 'medium',
+              category: data.category || 'medicine',
+              completed: data.completed ?? false,
+              snoozed: data.snoozed ?? false,
+              missed: data.missed ?? false,
+              completedAt: data.completedAt,
+              completedTime: data.completedTime,
+              patientConfirmation: data.patientConfirmation ?? false,
+              patientConfirmed: data.patientConfirmed ?? false,
+              status: data.status || (data.completed ? 'completed' : 'upcoming'),
+              voiceReminderText: data.voiceReminderText,
+              dosage: data.dosage,
+              notes: data.notes,
+              source: data.source || 'caregiver',
+              createdBy: data.createdBy || 'caregiver',
+              refillDays: data.refillDays,
+              refillAlert: data.refillAlert
+            });
+          }
         });
 
         console.log(`[TaskService] Received ${list.length} real task/medication record(s) from Firestore.`);
@@ -93,6 +109,23 @@ export const taskService = {
   },
 
   /**
+   * Update full task details in Firestore (for editing / reassigning)
+   */
+  async updateTask(taskId: string, updates: Partial<TaskItem>): Promise<void> {
+    const path = `tasks/${taskId}`;
+
+    try {
+      const payload: any = { ...updates };
+      if (updates.patientId) {
+        payload.patientId = updates.patientId.toUpperCase();
+      }
+      await updateDoc(doc(firestore, 'tasks', taskId), payload);
+    } catch (error) {
+      handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  /**
    * Update task status in Firestore
    */
   async updateTaskStatus(taskId: string, status: TaskStatus, completed: boolean): Promise<void> {
@@ -110,6 +143,20 @@ export const taskService = {
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
+    }
+  },
+
+  /**
+   * Delete task from Firestore
+   */
+  async deleteTask(taskId: string): Promise<void> {
+    const path = `tasks/${taskId}`;
+
+    try {
+      const { deleteDoc } = await import('firebase/firestore');
+      await deleteDoc(doc(firestore, 'tasks', taskId));
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, path);
     }
   }
 };

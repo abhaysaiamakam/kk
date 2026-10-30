@@ -16,8 +16,16 @@ export type PatientMood = MoodType;
 export interface TaskItem {
   id: string;
   patientId: string;
+  patientUid?: string;
+  caregiverUid?: string;
+  assignedBy?: string;
+  assignedByName?: string;
   title: string;
+  description?: string;
   time: string;
+  dueDate?: string;
+  dueTime?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   category: 'medicine' | 'exercise' | 'calm' | 'meal' | 'activity';
   completed: boolean;
   snoozed: boolean;
@@ -34,6 +42,32 @@ export interface TaskItem {
   createdBy?: 'caregiver' | 'system' | 'patient' | string;
   refillDays?: number;
   refillAlert?: boolean;
+}
+
+export interface CallLog {
+  id: string;
+  callLogId: string;
+  patientUid?: string;
+  patientId: string;
+  caregiverUid?: string;
+  callerUid: string;
+  callerName: string;
+  callerRole?: 'patient' | 'caregiver';
+  receiverUid?: string;
+  receiverName: string;
+  receiverRole?: 'patient' | 'caregiver';
+  callType: 'incoming' | 'outgoing' | 'audio' | 'video';
+  callStatus: 'completed' | 'missed' | 'declined';
+  callDate: string; // e.g. "2026-10-30" or "Today"
+  callTime: string; // e.g. "10:30 AM"
+  duration: string; // e.g. "04:12" or "0 mins"
+  notes?: string;
+  createdBy: string; // UID
+  createdByName?: string;
+  createdAt: string; // ISO string
+  updatedAt?: string;
+  lastEditedBy?: string;
+  lastEditedByName?: string;
 }
 
 export interface ActivityLog {

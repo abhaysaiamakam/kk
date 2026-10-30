@@ -175,5 +175,18 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidMood(incoming()) && incoming().id == existing().id;
       allow delete: if isSignedIn();
     }
+
+    // 11. Call Logs collection
+    function isValidCallLog(data) {
+      return (data.id is string || data.callLogId is string) &&
+             data.patientId is string && data.patientId.size() <= 128;
+    }
+
+    match /callLogs/{callLogId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidCallLog(incoming());
+      allow update: if isSignedIn();
+      allow delete: if isSignedIn();
+    }
   }
 }

@@ -23,6 +23,7 @@ interface NavbarProps {
   unreadAlertCount: number;
   onViewAlerts?: () => void;
   onOpenVoiceNotes?: () => void;
+  onOpenCallLogs?: () => void;
   onLogout: () => void;
   activePatientName?: string;
   activePatientId?: string;
