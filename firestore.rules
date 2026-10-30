@@ -127,5 +127,33 @@ service cloud.firestore {
       allow update: if isSignedIn() && isValidAlert(incoming()) && incoming().id == existing().id;
       allow delete: if isSignedIn();
     }
+
+    // 7. AI Sessions (Voice Companion & Reminiscence interactions)
+    function isValidAiSession(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.language in ['en', 'kn', 'hi'];
+    }
+
+    match /aiSessions/{sessionId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidAiSession(incoming());
+      allow update: if isSignedIn() && isValidAiSession(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
+
+    // 8. Caregiver Summaries (Grounded Daily and Weekly clinical syntheses)
+    function isValidCaregiverSummary(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.reportType in ['daily', 'weekly', 'missed', 'medication', 'mood'];
+    }
+
+    match /caregiverSummaries/{summaryId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidCaregiverSummary(incoming());
+      allow update: if isSignedIn() && isValidCaregiverSummary(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
   }
 }

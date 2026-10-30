@@ -830,8 +830,38 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
             </button>
           </div>
 
+          {/* Quick Help & Reassurance Buttons for Elderly Dementia Care */}
+          <div className="w-full space-y-1.5">
+            <div className="flex items-center justify-between px-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                {language === 'kn' ? 'ತ್ವರಿತ ನೆರವು ಮತ್ತು ಸಾಂತ್ವನ' : language === 'hi' ? 'त्वरित सहायता और सांत्वना' : 'Quick Help & Comfort'}
+              </span>
+              <span className="text-[10px] text-[#3B664B] font-semibold">
+                {language === 'kn' ? 'ನಾವು ನಿಮ್ಮೊಂದಿಗೆ ಇದ್ದೇವೆ' : language === 'hi' ? 'हम आपके साथ हैं' : 'Always here with you'}
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              {[
+                { label: language === 'kn' ? 'ನನಗೆ ಗೊಂದಲವಾಗಿದೆ 🌿' : language === 'hi' ? 'मुझे भ्रम हो रहा है 🌿' : "I'm confused 🌿", query: "I'm confused, where am I?" },
+                { label: language === 'kn' ? 'ನೆನಪಿಸಲು ಸಹಾಯ ಮಾಡಿ 💭' : language === 'hi' ? 'याद दिलाने में मदद करें 💭' : "Help me remember 💭", query: "Help me remember what day and time it is" },
+                { label: language === 'kn' ? 'ಮುಂದೆ ಏನು ಮಾಡಬೇಕು? ⏰' : language === 'hi' ? 'मुझे आगे क्या करना चाहिए? ⏰' : "What should I do next? ⏰", query: "What should I do next?" },
+                { label: language === 'kn' ? 'ಯಾರೊಂದಿಗಾದರೂ ಮಾತನಾಡಬೇಕು 💬' : language === 'hi' ? 'किसी से बात करनी है 💬' : "I want to talk to someone 💬", query: "I want to talk to someone" },
+                { label: language === 'kn' ? 'ಒಂಟಿತನ ಅನಿಸುತ್ತಿದೆ 💛' : language === 'hi' ? 'अकेलापन महसूस हो रहा है 💛' : "I feel lonely 💛", query: "I feel lonely today" },
+                { label: language === 'kn' ? 'ಆರೈಕೆದಾರರಿಗೆ ಕರೆ ಮಾಡಿ 📞' : language === 'hi' ? 'केयरगिवर को कॉल करें 📞' : "Call my caregiver 📞", query: "Call my caregiver Priya" }
+              ].map((help, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleProcessUserCommand(help.query)}
+                  className="px-3 py-1.5 rounded-xl bg-[#EBF3EE] hover:bg-[#DCEEE2] border border-[#A8C9B0] text-[#2D4F3B] text-xs font-bold whitespace-nowrap transition-all shadow-2xs active:scale-95 cursor-pointer shrink-0"
+                >
+                  {help.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* Quick Voice Command Suggestion Chips matching Section 2 */}
-          <div className="w-full flex items-center justify-start sm:justify-center overflow-x-auto gap-2 pt-1 pb-1 scrollbar-none">
+          <div className="w-full flex items-center justify-start sm:justify-center overflow-x-auto gap-2 pt-0.5 pb-1 scrollbar-none">
             {[
               { label: language === 'kn' ? 'ಮುಂದಿನ ಕೆಲಸ 🕒' : language === 'hi' ? 'अगला काम 🕒' : 'What is my next task? 🕒', query: 'What is my next task?' },
               { label: language === 'kn' ? 'ಔಷಧಗಳು 💊' : language === 'hi' ? 'दवाइयां 💊' : 'What medicines do I need to take? 💊', query: 'What medicines do I need to take?' },

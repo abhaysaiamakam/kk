@@ -40,6 +40,7 @@ import {
 import { translations } from '../data/translations';
 import { db } from '../services/db';
 import { speechController } from '../utils/audio';
+import { aiClient } from '../services/aiClient';
 
 interface CaregiverDashboardProps {
   patients: PatientProfile[];
@@ -88,6 +89,8 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const [speechState, setSpeechState] = useState(speechController.getState());
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [speechLang, setSpeechLang] = useState<'en' | 'kn' | 'hi'>('en');
+  const [dynamicSummary, setDynamicSummary] = useState<string>('');
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
 
   const t = translations[language];
 
@@ -108,8 +111,24 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
     };
   }, [activePatient.id]);
 
-  // Current AI summary text derived directly from real saved records
-  const currentSummaryText = db.generateAISummary(activePatient.id, summaryType);
+  useEffect(() => {
+    setDynamicSummary('');
+  }, [activePatient.id, summaryType]);
+
+  // Current AI summary text derived from server dual-provider AI or real saved records
+  const currentSummaryText = dynamicSummary || db.generateAISummary(activePatient.id, summaryType);
+
+  const handleGenerateAiReport = async () => {
+    setIsAiLoading(true);
+    try {
+      const report = await aiClient.getCaregiverSummary(activePatient.id, summaryType, language);
+      if (report) setDynamicSummary(report);
+    } catch {
+      // Fallback
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   const handlePlayVoiceSummary = () => {
     if (speechState.isPlaying && !speechState.isPaused) {
@@ -301,11 +320,22 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                   <Sparkles className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-base text-[#263238] font-['Poppins']">
-                    Today&apos;s AI Summary
-                  </h3>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-bold text-base text-[#263238] font-['Poppins']">
+                      Today&apos;s AI Summary
+                    </h3>
+                    <button
+                      onClick={handleGenerateAiReport}
+                      disabled={isAiLoading}
+                      className="px-2 py-0.5 rounded-lg bg-[#EEF6FB] hover:bg-[#D8EAF5] text-[#1E4D6B] text-[10px] font-bold flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+                      title="Generate dynamic synthesis with Google Gemini / OpenRouter"
+                    >
+                      <Sparkles className={`w-3 h-3 ${isAiLoading ? 'animate-spin text-[#3B664B]' : 'text-[#1E4D6B]'}`} />
+                      <span>{isAiLoading ? 'Synthesizing...' : 'AI Synthesize'}</span>
+                    </button>
+                  </div>
                   <span className="text-[10px] text-gray-400">
-                    {activePatient.name} • Live Activity Synthesis
+                    {activePatient.name} • Live Activity &amp; Behavioral Synthesis
                   </span>
                 </div>
               </div>

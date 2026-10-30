@@ -12,20 +12,24 @@ import {
   Heart, 
   Phone 
 } from 'lucide-react';
-import { PhotoMemory, FamiliarFace, FamilyMessage, ImportantDate } from '../types';
+import { PhotoMemory, FamiliarFace, FamilyMessage, ImportantDate, Language } from '../types';
 import { db } from '../services/db';
 import { speakText, playChime } from '../utils/audio';
+import { aiClient } from '../services/aiClient';
+import { Sparkles, MessageCircleHeart } from 'lucide-react';
 
 interface MemoryLaneModalProps {
   isOpen: boolean;
   onClose: () => void;
   canUpload?: boolean;
+  language?: Language;
 }
 
 export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
   isOpen,
   onClose,
-  canUpload = true
+  canUpload = true,
+  language = 'en'
 }) => {
   const [activeTab, setActiveTab] = useState<'photos' | 'faces' | 'messages' | 'dates'>('photos');
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoMemory | null>(null);
@@ -34,6 +38,8 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
   const [newTitle, setNewTitle] = useState('');
   const [newCaption, setNewCaption] = useState('');
   const [newUrl, setNewUrl] = useState('');
+  const [aiPrompts, setAiPrompts] = useState<string[]>([]);
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState(false);
 
   if (!isOpen) return null;
 
@@ -113,6 +119,24 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
     }
   };
 
+  const handleLoadAiPrompts = async (photo: PhotoMemory) => {
+    setIsLoadingPrompts(true);
+    try {
+      const prompts = await aiClient.getMemorySuggestions(
+        photo.title,
+        photo.caption,
+        photo.date,
+        photo.tags,
+        language
+      );
+      setAiPrompts(prompts);
+    } catch {
+      // Handled in client
+    } finally {
+      setIsLoadingPrompts(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/45 backdrop-blur-xs animate-in fade-in">
       <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100 flex flex-col max-h-[92vh]">
@@ -127,9 +151,15 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h2 className="text-xl font-bold text-[#263238] font-['Poppins']">
-                Memory Lane
-              </h2>
+              <div className="flex items-center space-x-2">
+                <h2 className="text-xl font-bold text-[#263238] font-['Poppins']">
+                  Memory Lane
+                </h2>
+                <span className="px-2 py-0.5 rounded-full bg-[#A8C9B0]/25 text-[#2D4F3B] text-[10px] font-bold flex items-center space-x-1">
+                  <Sparkles className="w-3 h-3 text-[#3B664B]" />
+                  <span>AI Reminiscence</span>
+                </span>
+              </div>
               <p className="text-xs text-gray-500">
                 Familiar faces, happy milestones &amp; family love
               </p>
@@ -223,7 +253,10 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
                 {photoList.map((photo) => (
                   <div
                     key={photo.id}
-                    onClick={() => setSelectedPhoto(photo)}
+                    onClick={() => {
+                      setSelectedPhoto(photo);
+                      handleLoadAiPrompts(photo);
+                    }}
                     className="group bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col"
                   >
                     <div className="relative h-32 overflow-hidden bg-gray-100">
@@ -381,9 +414,12 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
         {/* Selected Photo Modal */}
         {selectedPhoto && (
           <div className="fixed inset-0 z-60 bg-black/85 flex items-center justify-center p-4 animate-in fade-in">
-            <div className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden p-5 shadow-2xl">
+            <div className="relative max-w-lg w-full bg-white rounded-3xl overflow-hidden p-5 shadow-2xl max-h-[90vh] overflow-y-auto">
               <button
-                onClick={() => setSelectedPhoto(null)}
+                onClick={() => {
+                  setSelectedPhoto(null);
+                  setAiPrompts([]);
+                }}
                 className="absolute top-4 right-4 p-2 rounded-full bg-black/50 text-white hover:bg-black/80 z-10"
               >
                 ✕
@@ -397,7 +433,7 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
                 <span className="text-xs text-gray-400">{selectedPhoto.date}</span>
                 <button
                   onClick={() => handleReadStory(selectedPhoto)}
-                  className="px-3 py-1.5 rounded-xl bg-[#A8C9B0]/30 text-[#2D4F3B] text-xs font-bold flex items-center space-x-1.5"
+                  className="px-3 py-1.5 rounded-xl bg-[#A8C9B0]/30 text-[#2D4F3B] text-xs font-bold flex items-center space-x-1.5 cursor-pointer"
                 >
                   <Volume2 className="w-4 h-4" />
                   <span>Hear Story Aloud</span>
@@ -409,6 +445,50 @@ export const MemoryLaneModal: React.FC<MemoryLaneModalProps> = ({
               <p className="text-sm text-gray-700 mt-1 leading-relaxed">
                 {selectedPhoto.caption}
               </p>
+
+              {/* AI Reminiscence Conversation Starters Section */}
+              <div className="mt-4 pt-3 border-t border-gray-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-1.5 text-xs font-bold text-[#2D4F3B]">
+                    <Sparkles className="w-3.5 h-3.5 text-[#3B664B]" />
+                    <span>Gentle Reminiscence Prompts (AI)</span>
+                  </div>
+                  {isLoadingPrompts && (
+                    <span className="text-[10px] text-gray-400 animate-pulse">Thinking gently...</span>
+                  )}
+                </div>
+
+                {aiPrompts.length > 0 ? (
+                  <div className="space-y-2">
+                    {aiPrompts.map((prompt, i) => (
+                      <div
+                        key={i}
+                        className="p-3 bg-[#F8F7F0] rounded-2xl border border-gray-200/80 flex items-start justify-between gap-2"
+                      >
+                        <p className="text-xs text-gray-800 leading-relaxed italic">
+                          &ldquo;{prompt}&rdquo;
+                        </p>
+                        <button
+                          onClick={() => speakText(prompt, language)}
+                          className="p-1.5 rounded-xl bg-white hover:bg-gray-100 text-[#3B664B] shrink-0 border border-gray-200 cursor-pointer"
+                          title="Speak prompt aloud"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => handleLoadAiPrompts(selectedPhoto)}
+                    className="w-full py-2 px-3 rounded-xl bg-[#EEF6FB] border border-[#A0CDE8] text-[#1E4D6B] text-xs font-semibold hover:bg-[#D8EAF5] cursor-pointer flex items-center justify-center space-x-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Spark Gentle AI Conversation Prompts</span>
+                  </button>
+                )}
+              </div>
+
             </div>
           </div>
         )}

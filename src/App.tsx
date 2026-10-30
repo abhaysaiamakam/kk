@@ -361,6 +361,7 @@ export default function App() {
         isOpen={showMemoryLaneModal}
         onClose={() => setShowMemoryLaneModal(false)}
         canUpload={true}
+        language={language}
       />
 
       {/* Family Connect Modal (Section 12) */}
@@ -437,6 +438,8 @@ export default function App() {
       <BrainGamesModal
         isOpen={showBrainGamesModal}
         onClose={() => setShowBrainGamesModal(false)}
+        language={language}
+        patientName={activePatient.name}
       />
 
       {/* Spotify Calming Music Player (Screen 10) */}

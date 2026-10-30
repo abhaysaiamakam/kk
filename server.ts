@@ -21,6 +21,15 @@ import {
   PatientProfile,
   RoutineSuggestion
 } from './src/types.ts';
+import {
+  checkRateLimit,
+  getAIProviderStatus,
+  generateWithFallback,
+  buildCompanionSystemPrompt,
+  generateMemoryConversationPrompt,
+  generateCognitiveHint,
+  generateCaregiverSummaryReport
+} from './src/server/aiService.ts';
 
 dotenv.config();
 
@@ -406,10 +415,25 @@ app.post('/api/suggestions/:id/approve', (req: Request, res: Response) => {
 });
 
 // -------------------------------------------------------------
-// AI Voice Companion Conversational API Endpoint
+// AI Provider Status Endpoint
 // -------------------------------------------------------------
-app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
+app.get('/api/ai/status', (_req: Request, res: Response) => {
+  res.json({ success: true, data: getAIProviderStatus() });
+});
+
+// -------------------------------------------------------------
+// Unified AI Voice Companion Handler
+// -------------------------------------------------------------
+async function handleVoiceCompanionRequest(req: Request, res: Response) {
   try {
+    const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp, 80)) {
+      return res.status(429).json({
+        success: false,
+        error: 'Too many requests. Please wait a moment before asking again.'
+      });
+    }
+
     const { patientId, message, language = 'en' } = req.body;
     const patient = patients.find((p) => p.id === patientId) || patients[0];
     const patientTasks = tasks.filter((t) => t.patientId === patient.id);
@@ -417,6 +441,7 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
     const completedTasks = patientTasks.filter((t) => t.completed);
     const nextTask = uncompletedTasks[0];
     const patientMeds = patientTasks.filter((t) => t.category === 'medicine');
+    const firstName = patient.name.split(' ')[0];
 
     const msgLower = (message || '').toLowerCase().trim();
 
@@ -442,21 +467,87 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
       action = 'trigger_sos_confirmation';
       needsConfirmation = true;
       if (language === 'kn') {
-        spokenText = `ನಾನು ನಿಮ್ಮೊಂದಿಗೆ ಇಲ್ಲೇ ಇದ್ದೇನೆ. ನಾನು ತುರ್ತು ಸಹಾಯಕ್ಕಾಗಿ ಆರೈಕೆದಾರರಿಗೆ ಎಚ್ಚರಿಕೆ ಕಳುಹಿಸಿ ನಿಮ್ಮ ಲೈವ್ ಲೊಕೇಶನ್ ಹಂಚಿಕೊಳ್ಳಲೇ?`;
+        spokenText = `ನಾನು ನಿಮ್ಮೊಂದಿಗೆ ಇಲ್ಲೇ ಇದ್ದೇನೆ, ${firstName}. ನಾನು ತುರ್ತು ಸಹಾಯಕ್ಕಾಗಿ ನಿಮ್ಮ ಆರೈಕೆದಾರ ಪ್ರಿಯಾಗೆ ಎಚ್ಚರಿಕೆ ಕಳುಹಿಸಿ ಲೈವ್ ಲೊಕೇಶನ್ ಹಂಚಿಕೊಳ್ಳಲೇ?`;
         confirmationPrompt = 'ತುರ್ತು SOS ಎಚ್ಚರಿಕೆಯನ್ನು ಕಳುಹಿಸಬೇಕೆ?';
       } else if (language === 'hi') {
-        spokenText = `मैं आपके साथ हूँ। क्या आप चाहते हैं कि मैं आपकी देखभालकर्ता प्रिया को इमरजेंसी अलर्ट भेजूं और आपकी लाइव लोकेशन शेयर करूँ?`;
+        spokenText = `मैं आपके साथ हूँ, ${firstName}। क्या आप चाहते हैं कि मैं आपकी देखभालकर्ता प्रिया को इमरजेंसी अलर्ट भेजूं और आपकी लाइव लोकेशन शेयर करूँ?`;
         confirmationPrompt = 'क्या इमरजेंसी SOS अलर्ट भेजना है?';
       } else {
-        spokenText = `I am right here with you. Would you like me to send an emergency SOS alert to your caregiver Priya and share your live location?`;
+        spokenText = `I am right here with you, ${firstName}. Would you like me to send an emergency SOS alert to your caregiver Priya and share your live location?`;
         confirmationPrompt = 'Would you like to trigger an emergency SOS alert?';
       }
     }
-    // 2. Next task command
+    // 2. "I'm confused" / Disorientation grounding
+    else if (
+      msgLower.includes('confused') ||
+      msgLower.includes('where am i') ||
+      msgLower.includes('who are you') ||
+      msgLower.includes('ಗೊಂದಲ') ||
+      msgLower.includes('ನಾನು ಎಲ್ಲಿದ್ದೇನೆ') ||
+      msgLower.includes('भ्रम') ||
+      msgLower.includes('मैं कहाँ हूँ')
+    ) {
+      intent = 'confusion_reassurance';
+      if (language === 'kn') {
+        spokenText = `ನೀವು ನಿಮ್ಮ ಮನೆಯಲ್ಲೇ ಸುರಕ್ಷಿತವಾಗಿದ್ದೀರಿ, ${firstName}. ಎಲ್ಲವೂ ಶಾಂತವಾಗಿದೆ. ನಾನು ನಿಮ್ಮ ಮೈಂಡ್‌ಕೇರ್ ಧ್ವನಿ ಸಹಾಯಕ.`;
+      } else if (language === 'hi') {
+        spokenText = `आप अपने घर में बिल्कुल सुरक्षित हैं, ${firstName} जी। सब कुछ ठीक है। मैं आपका माइंडकेयर साथी हूँ।`;
+      } else {
+        spokenText = `You are safe in your comfortable home, ${firstName}. Everything is okay, and I am right here with you.`;
+      }
+    }
+    // 3. "Help me remember" / Reminiscence support
+    else if (
+      msgLower.includes('help me remember') ||
+      msgLower.includes('remember') ||
+      msgLower.includes('ನೆನಪಿಸು') ||
+      msgLower.includes('ನೆನಪಾಗುತ್ತಿಲ್ಲ') ||
+      msgLower.includes('याद दिलाओ') ||
+      msgLower.includes('याद नहीं')
+    ) {
+      intent = 'memory_support';
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      if (language === 'kn') {
+        spokenText = `ಈಗ ಸಮಯ ${timeStr}. ನೀವು ಬೆಳಗಿನ ದಿನಚರಿಯನ್ನು ಶಾಂತವಾಗಿ ಪೂರೈಸಿದ್ದೀರಿ. ನಿಮ್ಮ ಕುಟುಂಬ ನಿಮ್ಮನ್ನು ತುಂಬಾ ಪ್ರೀತಿಸುತ್ತದೆ.`;
+      } else if (language === 'hi') {
+        spokenText = `अभी समय ${timeStr} है। आपने सुबह की दिनचर्या शांति से पूरी की है। आपका परिवार आपसे बहुत प्यार करता है।`;
+      } else {
+        spokenText = `It is currently ${timeStr}. You have completed your morning routine peacefully. Your loved ones cherish you dearly.`;
+      }
+    }
+    // 4. "I feel lonely" / "I want to talk to someone"
+    else if (
+      msgLower.includes('lonely') ||
+      msgLower.includes('alone') ||
+      msgLower.includes('talk to someone') ||
+      msgLower.includes('ಏಕಾಂಗಿ') ||
+      msgLower.includes('ಒಂಟಿ') ||
+      msgLower.includes('ಮಾತನಾಡಬೇಕು') ||
+      msgLower.includes('अकेला') ||
+      msgLower.includes('अकेलापन') ||
+      msgLower.includes('बात करनी है')
+    ) {
+      intent = 'loneliness_support';
+      action = 'call_contact';
+      actionPayload = { contactName: 'Meera (Daughter)', phone: '+91 98765 43210' };
+      needsConfirmation = true;
+      if (language === 'kn') {
+        spokenText = `ನಾನು ನಿಮ್ಮೊಂದಿಗೆ ಇಲ್ಲೇ ಇದ್ದೇನೆ, ${firstName}. ನಿಮ್ಮ ಮಗಳು ಮೀರಾ ಅವರಿಗೆ ನಾವು ಕರೆ ಮಾಡಲೇ?`;
+        confirmationPrompt = 'ಮಗಳು ಮೀರಾ ಅವರಿಗೆ ಕರೆ ಮಾಡಬೇಕೆ?';
+      } else if (language === 'hi') {
+        spokenText = `मैं आपके साथ हूँ, ${firstName} जी। क्या आप अपनी बेटी मीरा से बात करना चाहेंगे?`;
+        confirmationPrompt = 'क्या बेटी मीरा को कॉल करना है?';
+      } else {
+        spokenText = `I am right here by your side, ${firstName}. Would you like to call your daughter Meera to have a sweet chat?`;
+        confirmationPrompt = 'Would you like to call your daughter Meera?';
+      }
+    }
+    // 5. Next task command
     else if (
       msgLower.includes('next task') ||
       msgLower.includes('what next') ||
       msgLower.includes("what's next") ||
+      msgLower.includes('what should i do') ||
       msgLower.includes('ಮುಂದಿನ ಕೆಲಸ') ||
       msgLower.includes('ಮುಂದಿನ ಕಾರ್ಯ') ||
       msgLower.includes('अगला काम') ||
@@ -467,23 +558,23 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         action = 'remind_task';
         actionPayload = { taskId: nextTask.id, taskTitle: nextTask.title, scheduledTime: nextTask.time };
         if (language === 'kn') {
-          spokenText = `ನಿಮ್ಮ ಮುಂದಿನ ಕಾರ್ಯ: ${nextTask.time} ಗೆ "${nextTask.title}". ನಾನು ನಿಮಗೆ ಇದರ ಬಗ್ಗೆ ನೆನಪಿಸಬೇಕೆ?`;
+          spokenText = `ನಿಮ್ಮ ಮುಂದಿನ ಕಾರ್ಯ: ${nextTask.time} ಗೆ "${nextTask.title}". ನಾನು ನಿಮಗೆ ನೆನಪಿಸಬೇಕೆ?`;
         } else if (language === 'hi') {
-          spokenText = `आपका अगला काम ${nextTask.time} पर "${nextTask.title}" है। क्या आप चाहते हैं कि मैं आपको याद दिलाऊं?`;
+          spokenText = `आपका अगला काम ${nextTask.time} पर "${nextTask.title}" है। क्या मैं आपको याद दिलाऊं?`;
         } else {
           spokenText = `Your next task is ${nextTask.title} at ${nextTask.time}. Would you like me to remind you?`;
         }
       } else {
         if (language === 'kn') {
-          spokenText = `ನೀವು ಇಂದಿನ ಎಲ್ಲಾ ನಿಗದಿತ ಕಾರ್ಯಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ! ಆರಾಮವಾಗಿರಿ.`;
+          spokenText = `ನೀವು ಇಂದಿನ ಎಲ್ಲಾ ನಿಗದಿತ ಕಾರ್ಯಗಳನ್ನು ಯಶಸ್ವಿಯಾಗಿ ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ! ಆರಾಮವಾಗಿ ವಿಶ್ರಾಂತಿ ಪಡೆಯಿರಿ.`;
         } else if (language === 'hi') {
-          spokenText = `आपने आज के अपने सभी निर्धारित कार्य पूरे कर लिए हैं! आराम कीजिए।`;
+          spokenText = `आपने आज के अपने सभी निर्धारित कार्य पूरे कर लिए हैं! आराम से विश्राम कीजिए।`;
         } else {
           spokenText = `You have completed all your scheduled tasks for today! Take some gentle rest.`;
         }
       }
     }
-    // 3. Medication command
+    // 6. Medication command
     else if (
       msgLower.includes('medicine') ||
       msgLower.includes('medicines') ||
@@ -513,10 +604,12 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         spokenText = `You have taken: ${takenNames}. Upcoming medicines: ${pendingNames}.`;
       }
     }
-    // 4. Calling family / daughter / son / doctor
+    // 7. Calling family / daughter / son / caregiver
     else if (
       msgLower.includes('call') ||
       msgLower.includes('phone') ||
+      msgLower.includes('daughter') ||
+      msgLower.includes('caregiver') ||
       msgLower.includes('ಕರೆ') ||
       msgLower.includes('ಫೋನ್') ||
       msgLower.includes('कॉल') ||
@@ -526,15 +619,15 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
       let contactName = 'Meera (Daughter)';
       let phone = '+91 98765 43210';
 
-      if (msgLower.includes('son') || msgLower.includes('rohit') || msgLower.includes('ಮಗ') || msgLower.includes('बेटा')) {
+      if (msgLower.includes('caregiver') || msgLower.includes('priya') || msgLower.includes('ಆರೈಕೆದಾರ') || msgLower.includes('केयरगिवर')) {
+        contactName = 'Priya Sharma (Caregiver)';
+        phone = '+91 98450 12345';
+      } else if (msgLower.includes('son') || msgLower.includes('rohit') || msgLower.includes('ಮಗ') || msgLower.includes('बेटा')) {
         contactName = 'Rohit (Son)';
         phone = '+91 98765 98765';
       } else if (msgLower.includes('wife') || msgLower.includes('sita') || msgLower.includes('ಹೆಂಡತಿ') || msgLower.includes('पत्नी')) {
         contactName = 'Sita (Wife)';
         phone = '+91 91234 56789';
-      } else if (msgLower.includes('doctor') || msgLower.includes('suresh') || msgLower.includes('ವೈದ್ಯರು') || msgLower.includes('डॉक्टर')) {
-        contactName = 'Dr. Arvind / Dr. Suresh';
-        phone = '+91 99887 66554';
       }
 
       action = 'call_contact';
@@ -552,7 +645,7 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         confirmationPrompt = `Would you like to call ${contactName}?`;
       }
     }
-    // 5. Relaxing music
+    // 8. Relaxing music
     else if (
       msgLower.includes('music') ||
       msgLower.includes('song') ||
@@ -573,7 +666,7 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         spokenText = `Playing peaceful flute melodies for you to relax.`;
       }
     }
-    // 6. Breathing / Calm exercise
+    // 9. Breathing / Calm exercise
     else if (
       msgLower.includes('breath') ||
       msgLower.includes('breathing') ||
@@ -595,7 +688,7 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         spokenText = `Starting your gentle guided breathing exercise. Inhale calm, exhale tension.`;
       }
     }
-    // 7. Photos / Memories
+    // 10. Photos / Memories
     else if (
       msgLower.includes('photo') ||
       msgLower.includes('photos') ||
@@ -619,7 +712,7 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         spokenText = `Opening your family photo album and memories.`;
       }
     }
-    // 8. Remind later / Snooze
+    // 11. Remind later / Snooze
     else if (
       msgLower.includes('remind me later') ||
       msgLower.includes('snooze') ||
@@ -641,28 +734,7 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
         spokenText = `Alright, I will remind you again in 15 minutes. Rest easy.`;
       }
     }
-    // 9. Caregiver message / Tell my caregiver something
-    else if (
-      msgLower.includes('caregiver') ||
-      msgLower.includes('tell') ||
-      msgLower.includes('message') ||
-      msgLower.includes('voice note') ||
-      msgLower.includes('ಆರೈಕೆದಾರ') ||
-      msgLower.includes('ಸಂದೇಶ') ||
-      msgLower.includes('केयरगಿವರ್') ||
-      msgLower.includes('केयरगिवर')
-    ) {
-      intent = 'caregiver_message';
-      action = 'record_caregiver_message';
-      if (language === 'kn') {
-        spokenText = `ನಿಮ್ಮ ಆರೈಕೆದಾರ ಪ್ರಿಯಾಗೆ ಧ್ವನಿ ಸಂದೇಶ ರೆಕಾರ್ಡ್ ಮಾಡಲು ನಾನು ಸಿದ್ಧನಾಗಿದ್ದೇನೆ. ನೀವು ಮಾತನಾಡಲು ಆರಂಭಿಸಬಹುದು.`;
-      } else if (language === 'hi') {
-        spokenText = `मैं आपकी देखभालकर्ता प्रिया के लिए वॉयस मैसेज रिकॉर्ड करने के लिए तैयार हूँ। आप बोल सकते हैं।`;
-      } else {
-        spokenText = `I am ready to record a voice message for your caregiver Priya. You can speak whenever you are ready.`;
-      }
-    }
-    // 10. How is my day / summary
+    // 12. How is my day / summary
     else if (
       msgLower.includes('how is my day') ||
       msgLower.includes('my day') ||
@@ -675,46 +747,39 @@ app.post('/api/voice-companion/chat', async (req: Request, res: Response) => {
       const completedList = completedTasks.map((t) => t.title).join(', ');
       const nextTitle = nextTask ? `${nextTask.title} at ${nextTask.time}` : 'all completed';
       if (language === 'kn') {
-        spokenText = `ನೀವು ಈಗಾಗಲೇ ${completedList || 'ಬೆಳಗಿನ ದಿನಚರಿ'} ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ. ನಿಮ್ಮ ಮುಂದಿನ ಚಟುವಟಿಕೆ: ${nextTitle}. ನಿಮ್ಮ ದಿನ ಶಾಂತಿಯುತವಾಗಿದೆ!`;
+        spokenText = `ನೀವು ಈಗಾಗಲೇ ${completedList || 'ಬೆಳಗಿನ ದಿನಚರಿ'} ಪೂರ್ಣಗೊಳಿಸಿದ್ದೀರಿ. ಮುಂದಿನ ಚಟುವಟಿಕೆ: ${nextTitle}. ನಿಮ್ಮ ದಿನ ಶಾಂತಿಯುತವಾಗಿದೆ!`;
       } else if (language === 'hi') {
-        spokenText = `आपने सुबह ${completedList || 'की दिनचर्या'} पूरी कर ली है। आपकी अगली गतिविधि ${nextTitle} है। आपका दिन बहुत अच्छा जा रहा है!`;
+        spokenText = `आपने सुबह ${completedList || 'की दिनचर्या'} पूरी कर ली है। अगली गतिविधि ${nextTitle} है। आपका दिन बहुत अच्छा जा रहा है!`;
       } else {
         spokenText = `You have completed your morning routine and breathing exercise. Your next activity is scheduled for ${nextTitle}. You are doing wonderful today!`;
       }
     }
-    // 11. General Gemini processing if GEMINI_API_KEY is available
-    else if (process.env.GEMINI_API_KEY) {
+    // 13. Dynamic Dual-Provider AI Reasoning (Gemini primary -> OpenRouter secondary)
+    else {
       try {
-        const ai = new GoogleGenAI();
-        const systemPrompt = `You are MindCare AI Voice Companion, a gentle, soothing, patient assistant for senior citizens and individuals living with dementia.
-Patient name: ${patient.name}, Age: ${patient.age}.
-Caregiver: Priya Sharma.
-Upcoming tasks: ${uncompletedTasks.map((t) => `${t.title} at ${t.time}`).join(', ') || 'None'}.
-Completed tasks today: ${completedTasks.map((t) => t.title).join(', ') || 'Morning routine'}.
-Target response language: ${language === 'kn' ? 'Kannada' : language === 'hi' ? 'Hindi' : 'English'}.
-Keep responses brief (1-2 short, comforting sentences), warm, and elder-friendly. Never invent tasks, medicines, or medical instructions.`;
-
-        const geminiRes = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
-          contents: message,
-          config: {
-            systemInstruction: systemPrompt
-          }
+        const systemPrompt = buildCompanionSystemPrompt({
+          patient,
+          tasks,
+          activities: timeline.filter((t) => t.patientId === patient.id),
+          moods: moods.filter((m) => m.patientId === patient.id),
+          language
         });
-        spokenText = geminiRes.text?.trim() || '';
+
+        const { text } = await generateWithFallback(systemPrompt, message, 150);
+        spokenText = text;
       } catch (err) {
-        console.warn('[Gemini Voice Companion Warning]', err);
+        console.warn('[AI Companion Warning]', err);
       }
     }
 
-    // Friendly fallback
+    // Friendly fallback if still empty
     if (!spokenText) {
       if (language === 'kn') {
-        spokenText = `ನಾನು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಲು ಇಲ್ಲಿದ್ದೇನೆ. ನೀವು "ಮುಂದಿನ ಕೆಲಸವೇನು?", "ಔಷಧಿಗಳು", ಅಥವಾ "ಮಗಳಿಗೆ ಕರೆ ಮಾಡು" ಎಂದು ಕೇಳಬಹುದು.`;
+        spokenText = `ನಾನು ನಿಮಗೆ ಸಹಾಯ ಮಾಡಲು ಇಲ್ಲಿದ್ದೇನೆ, ${firstName}. ನೀವು "ಮುಂದಿನ ಕೆಲಸವೇನು?", "ಔಷಧಿಗಳು", ಅಥವಾ "ಮಗಳಿಗೆ ಕರೆ ಮಾಡು" ಎಂದು ಕೇಳಬಹುದು.`;
       } else if (language === 'hi') {
-        spokenText = `मैं आपकी मदद के लिए यहाँ हूँ। आप मुझसे "अगला काम क्या है?", "मेरी दवाइयां", या "बेटी को कॉल करो" पूछ सकते हैं।`;
+        spokenText = `मैं आपकी मदद के लिए यहाँ हूँ, ${firstName} जी। आप मुझसे "अगला काम क्या है?", "मेरी दवाइयां", या "बेटी को कॉल करो" पूछ सकते हैं।`;
       } else {
-        spokenText = `I am right here to help you, ${patient.name.split(' ')[0]}. You can ask me "What is my next task?", "What medicines do I take?", or "Call my daughter".`;
+        spokenText = `I am right here to help you, ${firstName}. You can ask me "What is my next task?", "What medicines do I take?", or "Call my daughter".`;
       }
     }
 
@@ -730,6 +795,7 @@ Keep responses brief (1-2 short, comforting sentences), warm, and elder-friendly
         quickFollowUps: [
           language === 'kn' ? 'ಮುಂದಿನ ಕೆಲಸವೇನು? 🕒' : language === 'hi' ? 'अगला काम क्या है? 🕒' : 'What is my next task? 🕒',
           language === 'kn' ? 'ನನ್ನ ಔಷಧಗಳು 💊' : language === 'hi' ? 'मेरी दवाइयां 💊' : 'What medicines do I take? 💊',
+          language === 'kn' ? 'ನನಗೆ ಗೊಂದಲವಾಗಿದೆ 🌿' : language === 'hi' ? 'मुझे भ्रम हो रहा है 🌿' : "I'm confused 🌿",
           language === 'kn' ? 'ಮಗಳಿಗೆ ಕರೆ ಮಾಡು 📞' : language === 'hi' ? 'बेटी को कॉल करो 📞' : 'Call my daughter 📞',
           language === 'kn' ? 'ಸಂಗೀತ ಪ್ಲೇ ಮಾಡು 🎵' : language === 'hi' ? 'संगीत बजाओ 🎵' : 'Play relaxing music 🎵',
           language === 'kn' ? 'ಉಸಿರಾಟದ ವ್ಯಾಯಾಮ 🧘' : language === 'hi' ? 'प्राणायाम शुरू करो 🧘' : 'Start breathing exercise 🧘'
@@ -738,6 +804,64 @@ Keep responses brief (1-2 short, comforting sentences), warm, and elder-friendly
     });
   } catch (error: any) {
     console.error('[Voice Companion API Error]', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal error' });
+  }
+}
+
+app.post('/api/voice-companion/chat', handleVoiceCompanionRequest);
+app.post('/api/ai/companion', handleVoiceCompanionRequest);
+
+// -------------------------------------------------------------
+// AI Memory Lane Conversation Suggestion Endpoint
+// -------------------------------------------------------------
+app.post('/api/ai/memory-suggest', async (req: Request, res: Response) => {
+  try {
+    const { photoTitle = 'Family Photo', caption = '', date = '', tags = [], language = 'en' } = req.body;
+    const prompts = await generateMemoryConversationPrompt(photoTitle, caption, date, tags, language);
+    res.json({ success: true, data: { prompts } });
+  } catch (error: any) {
+    console.error('[AI Memory Suggest Error]', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal error' });
+  }
+});
+
+// -------------------------------------------------------------
+// AI Cognitive Game Adaptive Clue & Encouragement Endpoint
+// -------------------------------------------------------------
+app.post('/api/ai/cognitive-activity', async (req: Request, res: Response) => {
+  try {
+    const { gameType = 'memory', questionContext = '', userChoice = '', isCorrect = false, language = 'en' } = req.body;
+    const hint = await generateCognitiveHint(gameType, questionContext, userChoice, isCorrect, language);
+    res.json({ success: true, data: { hint } });
+  } catch (error: any) {
+    console.error('[AI Cognitive Activity Error]', error);
+    res.status(500).json({ success: false, error: error.message || 'Internal error' });
+  }
+});
+
+// -------------------------------------------------------------
+// AI Grounded Caregiver Summary Endpoint
+// -------------------------------------------------------------
+app.post('/api/ai/caregiver-summary', async (req: Request, res: Response) => {
+  try {
+    const { patientId, reportType = 'daily', language = 'en' } = req.body;
+    const patient = patients.find((p) => p.id === patientId) || patients[0];
+    const patientTasks = tasks.filter((t) => t.patientId === patient.id);
+    const patientTimeline = timeline.filter((t) => t.patientId === patient.id);
+    const patientMoods = moods.filter((m) => m.patientId === patient.id);
+
+    const summary = await generateCaregiverSummaryReport(
+      patient,
+      patientTasks,
+      patientTimeline,
+      patientMoods,
+      reportType,
+      language
+    );
+
+    res.json({ success: true, data: { summary, reportType, patientId: patient.id } });
+  } catch (error: any) {
+    console.error('[AI Caregiver Summary Error]', error);
     res.status(500).json({ success: false, error: error.message || 'Internal error' });
   }
 });
