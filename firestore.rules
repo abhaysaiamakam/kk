@@ -149,10 +149,18 @@ service cloud.firestore {
              data.reportType in ['daily', 'weekly', 'missed', 'medication', 'mood'];
     }
 
-    match /caregiverSummaries/{summaryId} {
+    // 9. Caregiver Requests
+    function isValidCaregiverRequest(data) {
+      return data.requestId is string &&
+             data.caregiverUid is string &&
+             data.patientId is string &&
+             data.status in ['pending', 'approved', 'declined'];
+    }
+
+    match /caregiverRequests/{requestId} {
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && isValidCaregiverSummary(incoming());
-      allow update: if isSignedIn() && isValidCaregiverSummary(incoming()) && incoming().id == existing().id;
+      allow create: if isSignedIn() && isValidCaregiverRequest(incoming());
+      allow update: if isSignedIn() && isValidCaregiverRequest(incoming());
       allow delete: if isSignedIn();
     }
   }

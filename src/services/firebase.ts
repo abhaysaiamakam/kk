@@ -107,6 +107,11 @@ export interface UserProfileDocument {
   dateOfBirth?: string;
   phone?: string;
   bloodGroup?: string;
+  caregiverName?: string;
+  caregiverPhone?: string;
+  connectedPatientIds?: string[];
+  pendingPatientIds?: string[];
+  caregiverIds?: string[];
   createdAt: string;
   updatedAt: string;
   isActive: boolean;

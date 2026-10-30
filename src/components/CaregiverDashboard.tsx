@@ -41,8 +41,10 @@ import { translations } from '../data/translations';
 import { db } from '../services/db';
 import { speechController } from '../utils/audio';
 import { aiClient } from '../services/aiClient';
+import { UserAvatar } from './UserAvatar';
 
 interface CaregiverDashboardProps {
+  caregiverName?: string;
   patients: PatientProfile[];
   activePatient: PatientProfile;
   onSelectPatient: (patient: PatientProfile) => void;
@@ -61,6 +63,7 @@ interface CaregiverDashboardProps {
 }
 
 export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
+  caregiverName,
   patients,
   activePatient,
   onSelectPatient,
@@ -210,7 +213,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-[#263238] font-['Poppins']">
-              {t.goodMorning}, Priya!
+              {t.goodMorning}, {caregiverName || 'Priya'}!
             </h1>
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center space-x-1">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -674,10 +677,10 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                     }`}
                   >
                     <div className="flex items-center space-x-3">
-                      <img
+                      <UserAvatar
                         src={p.avatar}
-                        alt={p.name}
-                        className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                        name={p.name}
+                        className="w-10 h-10 shrink-0"
                       />
                       <div>
                         <h4 className="font-bold text-xs text-[#263238]">

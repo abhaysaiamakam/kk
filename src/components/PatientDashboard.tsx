@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Copy, 
   Check, 
@@ -30,6 +30,8 @@ import confetti from 'canvas-confetti';
 import { PatientProfile, TaskItem, Language } from '../types';
 import { translations } from '../data/translations';
 import { speakText, playChime } from '../utils/audio';
+import { UserAvatar } from './UserAvatar';
+import { authService, CaregiverConnectionRequest } from '../services/authService';
 
 interface PatientDashboardProps {
   patient: PatientProfile;
@@ -79,7 +81,37 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   onOpenVoiceCompanion
 }) => {
   const [copiedId, setCopiedId] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<CaregiverConnectionRequest[]>([]);
   const t = translations[language];
+
+  // Fetch pending caregiver connection requests for this patient
+  useEffect(() => {
+    let isMounted = true;
+    const loadRequests = async () => {
+      try {
+        const reqs = await authService.getPendingRequestsForPatient(patient.id);
+        if (isMounted && reqs) {
+          setPendingRequests(reqs);
+        }
+      } catch (err) {
+        console.warn('Could not fetch pending caregiver requests:', err);
+      }
+    };
+    loadRequests();
+    return () => { isMounted = false; };
+  }, [patient.id]);
+
+  const handleRespondRequest = async (req: CaregiverConnectionRequest, approve: boolean) => {
+    try {
+      await authService.respondToConnectionRequest(req, approve);
+      setPendingRequests(prev => prev.filter(r => r.id !== req.id));
+      if (approve) {
+        alert(`Caregiver ${req.caregiverName} has been connected to your account successfully!`);
+      }
+    } catch (err) {
+      alert('Could not update caregiver request. Please try again.');
+    }
+  };
 
   // The most prominent upcoming task
   const nextTask = tasks.find((t) => !t.completed) || tasks[0];
@@ -121,6 +153,50 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
   return (
     <div className="min-h-[calc(100vh-65px)] bg-[#F8F7F0] pb-24 sm:pb-12 pt-4 px-4 sm:px-6 max-w-3xl mx-auto space-y-6">
       
+      {/* Caregiver Pending Connection Approval Banner */}
+      {pendingRequests.length > 0 && (
+        <div className="p-4 bg-amber-50 border-2 border-amber-300 rounded-3xl shadow-sm space-y-3">
+          <div className="flex items-center space-x-2 text-amber-900 font-bold text-sm">
+            <ShieldCheck className="w-5 h-5 text-amber-600 shrink-0" />
+            <span>Caregiver Connection Request Received</span>
+          </div>
+
+          {pendingRequests.map((req) => (
+            <div key={req.id} className="p-3 bg-white rounded-2xl border border-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center space-x-3">
+                <UserAvatar src={req.caregiverPhotoURL} name={req.caregiverName} size="md" />
+                <div>
+                  <h4 className="font-bold text-xs text-[#263238]">
+                    {req.caregiverName}
+                  </h4>
+                  <p className="text-[11px] text-gray-500">
+                    Phone: {req.caregiverPhone || 'N/A'} • Email: {req.caregiverEmail || 'N/A'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => handleRespondRequest(req, true)}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white text-xs font-bold cursor-pointer"
+                >
+                  Approve Access
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleRespondRequest(req, false)}
+                  className="px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold cursor-pointer"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* TOP ARCHITECTURAL HIGHLIGHTS STRIP matching header banner in image */}
       <div className="bg-white/80 backdrop-blur-xs rounded-2xl p-2.5 border border-[#A8C9B0]/40 shadow-2xs overflow-x-auto">
         <div className="flex items-center justify-between min-w-[560px] text-[11px] font-semibold text-gray-700 divide-x divide-gray-200">
@@ -142,7 +218,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       {/* Top Greeting matching Section 2 */}
       <div>
         <h1 className="text-2xl sm:text-3xl font-bold text-[#263238] font-['Poppins'] flex items-center space-x-2">
-          <span>Good morning, {patient.name.split(' ')[0]}!</span>
+          <span>Good morning, {(patient?.name || 'Patient').split(' ')[0]}!</span>
         </h1>
         <p className="text-sm font-medium text-[#4B7358] mt-0.5">
           {t.takeSmallSteps}
@@ -155,11 +231,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-[#D8EAF5]/90 via-[#A8C9B0]/40 to-[#EBF3EE] p-4 sm:p-5 border border-[#A8C9B0]/40 shadow-xs flex items-center justify-between cursor-pointer group hover:shadow-md transition-all"
       >
         <div className="flex items-center space-x-4 relative z-10">
-          <img
-            src={patient.avatar}
-            alt={patient.name}
-            className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
-          />
+          <UserAvatar src={patient.avatar} name={patient.name} size="lg" />
           <div>
             <div className="flex items-center space-x-2">
               <span className="text-sm font-bold text-[#263238]">

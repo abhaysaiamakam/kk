@@ -38,6 +38,8 @@ import { FamilyConnectModal } from './components/FamilyConnectModal';
 import { SmartMedicationModal } from './components/SmartMedicationModal';
 import { NotificationCenterModal } from './components/NotificationCenterModal';
 import { AIVoiceCompanionModal } from './components/AIVoiceCompanionModal';
+import { PatientRegistrationPage } from './components/PatientRegistrationPage';
+import { CaregiverRegistrationPage } from './components/CaregiverRegistrationPage';
 import { auth, onAuthStateChanged, FirebaseUser, UserProfileDocument } from './services/firebase';
 import { authService } from './services/authService';
 
@@ -48,6 +50,7 @@ export default function App() {
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [userRole, setUserRole] = useState<UserRole>(null);
+  const [registrationFlow, setRegistrationFlow] = useState<'patient' | 'caregiver' | null>(null);
   const [language, setLanguage] = useState<Language>('en');
   const [userName, setUserName] = useState('Aarav Sharma');
 
@@ -85,7 +88,7 @@ export default function App() {
   const userPatientProfile: PatientProfile | null = userProfile && userRole === 'patient' ? {
     id: userProfile.patientId || `P-${userProfile.uid.slice(0, 6).toUpperCase()}`,
     name: userProfile.fullName || 'Patient',
-    age: userProfile.age ? String(userProfile.age) : 'Not added yet',
+    age: typeof userProfile.age === 'number' ? userProfile.age : (parseInt(userProfile.age || '70') || 70),
     gender: 'Not added yet',
     bloodGroup: userProfile.bloodGroup || 'Not added yet',
     homeLocation: 'Not added yet',
@@ -98,7 +101,23 @@ export default function App() {
     caregiverId: 'Not added yet'
   } : null;
 
-  const activePatient = userPatientProfile || patients.find((p) => p.id === activePatientId) || patients[0];
+  const DEFAULT_PATIENT: PatientProfile = {
+    id: 'KK-PAT-100',
+    name: 'KeenKeep Patient',
+    age: 70,
+    gender: 'Female',
+    bloodGroup: 'O+',
+    homeLocation: 'Bengaluru, Karnataka',
+    liveLocationEnabled: true,
+    dateOfBirth: '1955-01-01',
+    avatar: '',
+    status: 'all_good',
+    streakDays: 1,
+    overallCompletion: 100,
+    caregiverId: 'CG-101'
+  };
+
+  const activePatient = userPatientProfile || patients.find((p) => p.id === activePatientId) || patients[0] || DEFAULT_PATIENT;
   const activePatientTasks = tasks.filter((t) => t.patientId === activePatient.id);
 
   // Global Firebase Auth State Listener
@@ -179,6 +198,7 @@ export default function App() {
     setUserProfile(null);
     setIsLoggedIn(false);
     setUserRole(null);
+    setRegistrationFlow(null);
   };
 
   // Real-time task synchronization handlers
@@ -252,22 +272,56 @@ export default function App() {
         />
       )}
 
-      {/* 2. Role Selection View (Screen 2) */}
+      {/* 2. Role Selection & Dedicated Registration Pages */}
       {isLoggedIn && !userRole && (
         <>
-          <Navbar
-            currentRole={null}
-            onRoleSwitch={() => {}}
-            language={language}
-            onLanguageChange={setLanguage}
-            onOpenSettings={() => setShowSettingsModal(true)}
-            unreadAlertCount={unreadAlertCount}
-            onLogout={handleLogout}
-          />
-          <RoleSelectionView
-            onSelectRole={handleSelectRole}
-            language={language}
-          />
+          {registrationFlow === 'patient' ? (
+            <PatientRegistrationPage
+              currentUser={currentUser}
+              language={language}
+              onRegistrationSuccess={(user, profile) => {
+                setRegistrationFlow(null);
+                handleLoginSuccess(user, profile);
+              }}
+              onBack={() => setRegistrationFlow(null)}
+              onLanguageChange={setLanguage}
+            />
+          ) : registrationFlow === 'caregiver' ? (
+            <CaregiverRegistrationPage
+              currentUser={currentUser}
+              language={language}
+              onRegistrationSuccess={(user, profile) => {
+                setRegistrationFlow(null);
+                handleLoginSuccess(user, profile);
+              }}
+              onBack={() => setRegistrationFlow(null)}
+              onLanguageChange={setLanguage}
+            />
+          ) : (
+            <>
+              <Navbar
+                currentRole={null}
+                onRoleSwitch={() => {}}
+                language={language}
+                onLanguageChange={setLanguage}
+                onOpenSettings={() => setShowSettingsModal(true)}
+                unreadAlertCount={unreadAlertCount}
+                onLogout={handleLogout}
+              />
+              <RoleSelectionView
+                onSelectRole={(role) => {
+                  if (role === 'patient') {
+                    setRegistrationFlow('patient');
+                  } else if (role === 'caregiver') {
+                    setRegistrationFlow('caregiver');
+                  } else {
+                    handleSelectRole(role);
+                  }
+                }}
+                language={language}
+              />
+            </>
+          )}
         </>
       )}
 

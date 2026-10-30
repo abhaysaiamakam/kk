@@ -9,10 +9,13 @@ import {
   User, 
   Globe, 
   Bell, 
-  ShieldCheck 
+  ShieldCheck,
+  Phone
 } from 'lucide-react';
 import { PatientProfile, Language } from '../types';
 import { translations } from '../data/translations';
+import { UserAvatar } from './UserAvatar';
+import { ImageUploader } from './ImageUploader';
 
 interface PatientDetailsModalProps {
   patient: PatientProfile;
@@ -68,7 +71,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
           <div className="flex items-center space-x-3">
             <button
               onClick={onClose}
-              className="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-700"
+              className="p-2 rounded-full hover:bg-gray-200 transition-colors text-gray-700 cursor-pointer"
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
@@ -86,23 +89,33 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-6">
           
           {/* Avatar & Patient ID Banner */}
-          <div className="flex items-center space-x-4 p-4 rounded-2xl bg-gradient-to-r from-[#D8EAF5]/50 to-[#A8C9B0]/20 border border-[#A8C9B0]/30">
-            <img
-              src={patient.avatar}
-              alt={patient.name}
-              className="w-16 h-16 rounded-full object-cover border-2 border-white shadow-sm shrink-0"
-            />
-            <div className="flex-1 min-w-0">
+          <div className="flex flex-col sm:flex-row items-center gap-4 p-4 rounded-2xl bg-gradient-to-r from-[#D8EAF5]/50 to-[#A8C9B0]/20 border border-[#A8C9B0]/30">
+            {isEditing ? (
+              <div className="shrink-0">
+                <ImageUploader
+                  photoURL={formData.avatar}
+                  name={formData.name}
+                  onChangePhoto={(newAvatar: string | null) => setFormData({ ...formData, avatar: newAvatar || '' })}
+                />
+              </div>
+            ) : (
+              <UserAvatar
+                src={formData.avatar}
+                name={formData.name}
+                className="w-16 h-16 shrink-0"
+              />
+            )}
+            <div className="flex-1 min-w-0 text-center sm:text-left">
               <h3 className="text-lg font-bold text-[#263238] truncate font-['Poppins']">
                 {formData.name}
               </h3>
-              <div className="flex items-center space-x-2 mt-0.5">
-                <span className="text-xs font-medium text-gray-600 bg-white/80 px-2 py-0.5 rounded-md border border-gray-200">
+              <div className="flex items-center justify-center sm:justify-start space-x-2 mt-0.5">
+                <span className="text-xs font-medium text-gray-600 bg-white/80 px-2.5 py-0.5 rounded-md border border-gray-200 font-mono">
                   Patient ID: {formData.id}
                 </span>
                 <button
                   onClick={handleCopyId}
-                  className="p-1 rounded-md text-gray-500 hover:text-[#2D4F3B] hover:bg-white transition-colors"
+                  className="p-1 rounded-md text-gray-500 hover:text-[#2D4F3B] hover:bg-white transition-colors cursor-pointer"
                   title="Copy Patient ID"
                 >
                   {copied ? <Check className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
@@ -165,12 +178,15 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                   <span>Blood Group</span>
                 </div>
                 {isEditing ? (
-                  <input
-                    type="text"
+                  <select
                     value={formData.bloodGroup}
                     onChange={(e) => setFormData({ ...formData, bloodGroup: e.target.value })}
-                    className="text-right text-sm font-semibold bg-white px-2 py-1 rounded-lg border border-gray-300 w-20"
-                  />
+                    className="text-right text-sm font-semibold bg-white px-2 py-1 rounded-lg border border-gray-300"
+                  >
+                    {['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'].map((bg) => (
+                      <option key={bg} value={bg}>{bg}</option>
+                    ))}
+                  </select>
                 ) : (
                   <span className="font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-md border border-red-100">
                     {formData.bloodGroup}
