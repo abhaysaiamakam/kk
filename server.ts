@@ -891,4 +891,11 @@ async function startServer() {
   });
 }
 
-startServer();
+// In standard dev and standalone Node/Docker run startServer().
+// On Vercel, the exported app is handled by Vercel serverless function (api/index.ts).
+if (process.env.VERCEL !== '1') {
+  startServer();
+}
+
+export { app };
+export default app;

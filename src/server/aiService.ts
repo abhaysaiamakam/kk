@@ -1,11 +1,15 @@
 import { GoogleGenAI } from '@google/genai';
 import { TaskItem, PatientProfile, ActivityLog, MoodRecord } from '../types.js';
 
-// Environment variables configuration
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || '';
-const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku';
+// Environment variables dynamic accessor for runtime and serverless (Vercel) compatibility
+export function getEnvConfig() {
+  return {
+    geminiApiKey: (process.env.GEMINI_API_KEY || '').trim(),
+    geminiModel: (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim(),
+    openRouterApiKey: (process.env.OPENROUTER_API_KEY || '').trim(),
+    openRouterModel: (process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku').trim()
+  };
+}
 
 // Basic in-memory rate limiter (max 60 requests per minute per IP)
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -28,7 +32,7 @@ export function checkRateLimit(clientIp: string, limit = 60, windowMs = 60000): 
 }
 
 // Timeout helper with AbortController
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 8000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 9000): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -39,20 +43,20 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 8
   }
 }
 
-// Provider Call: Google Gemini
+// Provider Call: Google Gemini (Primary via Official SDK)
 async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 300): Promise<string> {
-  if (!GEMINI_API_KEY) {
+  const { geminiApiKey, geminiModel } = getEnvConfig();
+  if (!geminiApiKey) {
     throw new Error('GEMINI_API_KEY is not set');
   }
 
-  const ai = new GoogleGenAI();
-  // Using official SDK pattern with timeout safety
+  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Gemini API request timed out')), 8000)
+    setTimeout(() => reject(new Error('Gemini API request timed out')), 9000)
   );
 
   const apiPromise = ai.models.generateContent({
-    model: GEMINI_MODEL,
+    model: geminiModel,
     contents: userPrompt,
     config: {
       systemInstruction: systemPrompt,
@@ -67,9 +71,10 @@ async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 
   return text;
 }
 
-// Provider Call: OpenRouter (Secondary / Fallback)
+// Provider Call: OpenRouter (Secondary / Fallback API)
 async function callOpenRouter(systemPrompt: string, userPrompt: string, maxTokens = 300): Promise<string> {
-  if (!OPENROUTER_API_KEY) {
+  const { openRouterApiKey, openRouterModel } = getEnvConfig();
+  if (!openRouterApiKey) {
     throw new Error('OPENROUTER_API_KEY is not set');
   }
 
@@ -79,12 +84,12 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, maxToken
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${openRouterApiKey}`,
         'HTTP-Referer': 'https://mindcare.app',
-        'X-Title': 'MindCare Dementia Companion'
+        'X-Title': 'MindCare Dementia Care Ecosystem'
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: openRouterModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -93,7 +98,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, maxToken
         temperature: 0.6
       })
     },
-    8000
+    9000
   );
 
   if (!response.ok) {
@@ -113,8 +118,10 @@ export async function generateWithFallback(
   userPrompt: string,
   maxTokens = 300
 ): Promise<{ text: string; providerUsed: 'gemini' | 'openrouter' | 'fallback' }> {
+  const { geminiApiKey, openRouterApiKey } = getEnvConfig();
+
   // 1. Try Primary: Google Gemini
-  if (GEMINI_API_KEY) {
+  if (geminiApiKey) {
     try {
       const text = await callGemini(systemPrompt, userPrompt, maxTokens);
       return { text, providerUsed: 'gemini' };
@@ -124,7 +131,7 @@ export async function generateWithFallback(
   }
 
   // 2. Try Secondary: OpenRouter
-  if (OPENROUTER_API_KEY) {
+  if (openRouterApiKey) {
     try {
       const text = await callOpenRouter(systemPrompt, userPrompt, maxTokens);
       return { text, providerUsed: 'openrouter' };
@@ -139,12 +146,13 @@ export async function generateWithFallback(
 
 // Provider Status API (Public to applet frontend without disclosing secrets)
 export function getAIProviderStatus() {
+  const { geminiApiKey, geminiModel, openRouterApiKey, openRouterModel } = getEnvConfig();
   return {
-    hasGeminiKey: Boolean(GEMINI_API_KEY),
-    geminiModel: GEMINI_MODEL,
-    hasOpenRouterKey: Boolean(OPENROUTER_API_KEY),
-    openRouterModel: OPENROUTER_MODEL,
-    primaryProvider: GEMINI_API_KEY ? 'gemini' : OPENROUTER_API_KEY ? 'openrouter' : 'deterministic_fallback'
+    hasGeminiKey: Boolean(geminiApiKey),
+    geminiModel,
+    hasOpenRouterKey: Boolean(openRouterApiKey),
+    openRouterModel,
+    primaryProvider: geminiApiKey ? 'gemini' : openRouterApiKey ? 'openrouter' : 'deterministic_fallback'
   };
 }
 

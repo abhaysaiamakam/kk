@@ -31,6 +31,7 @@ import {
 } from '../types';
 import { db } from '../services/db';
 import { playChime, speakText } from '../utils/audio';
+import { aiClient } from '../services/aiClient';
 
 interface AIVoiceCompanionModalProps {
   isOpen: boolean;
@@ -222,26 +223,15 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
     setAssistantState('processing');
 
     try {
-      const response = await fetch('/api/voice-companion/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId: patient.id,
-          message: userText,
-          language
-        })
-      });
+      const companionData = await aiClient.chatWithCompanion(patient.id, userText, language);
 
-      const resData = await response.json();
-
-      if (resData.success && resData.data) {
-        const {
-          spokenText,
-          action,
-          actionPayload,
-          needsConfirmation,
-          confirmationPrompt
-        } = resData.data;
+      const {
+        spokenText,
+        action,
+        actionPayload,
+        needsConfirmation,
+        confirmationPrompt
+      } = companionData;
 
         const assistantMsg: VoiceCompanionMessage = {
           id: `asst-${Date.now()}`,
@@ -278,9 +268,6 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
             setIsRecordingCaregiverNote(true);
           }
         }
-      } else {
-        throw new Error('Could not parse response');
-      }
     } catch {
       // Robust client fallback
       const fallbackText = language === 'kn'
