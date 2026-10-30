@@ -43,6 +43,9 @@ import { CaregiverRegistrationPage } from './components/CaregiverRegistrationPag
 import { DeleteAccountModal } from './components/DeleteAccountModal';
 import { auth, onAuthStateChanged, FirebaseUser, UserProfileDocument } from './services/firebase';
 import { authService } from './services/authService';
+import { patientService } from './services/patientService';
+import { taskService } from './services/taskService';
+import { emergencyService } from './services/emergencyService';
 import { calculateAgeFromDob } from './utils/ageUtils';
 
 export default function App() {
@@ -165,17 +168,23 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch real connected patient profiles from Firestore if logged in as a caregiver
+  // Real-time listener for connected patient profiles from Firestore for caregivers
   useEffect(() => {
     if (userProfile && userRole === 'caregiver' && userProfile.uid) {
-      authService.getPatientsForCaregiver(userProfile.uid, userProfile.connectedPatientIds)
-        .then((realPatients) => {
+      const unsubscribe = patientService.subscribeToConnectedPatients(
+        userProfile.uid,
+        (realPatients) => {
+          setPatients(realPatients);
           if (realPatients.length > 0) {
-            setPatients(realPatients);
-            setActivePatientId(realPatients[0].id);
+            setActivePatientId(prev => {
+              const exists = realPatients.some(p => p.id === prev);
+              return exists ? prev : realPatients[0].id;
+            });
           }
-        })
-        .catch((err) => console.warn('Could not load caregiver connected patients:', err));
+        },
+        (err) => console.warn('Real-time connected patients listener notice:', err)
+      );
+      return () => unsubscribe();
     }
   }, [userProfile, userRole]);
 
@@ -222,35 +231,48 @@ export default function App() {
   };
 
   // Real-time task synchronization handlers
-  const handleConfirmTask = (taskId: string) => {
+  const handleConfirmTask = async (taskId: string) => {
     db.updateTaskStatus(taskId, 'completed', true);
+    await taskService.updateTaskStatus(taskId, 'completed', true);
   };
 
-  const handleSnoozeTask = (taskId: string) => {
+  const handleSnoozeTask = async (taskId: string) => {
     db.updateTaskStatus(taskId, 'snoozed', true);
+    await taskService.updateTaskStatus(taskId, 'snoozed', false);
   };
 
-  const handleToggleTask = (taskId: string) => {
+  const handleToggleTask = async (taskId: string) => {
     const target = tasks.find((t) => t.id === taskId);
     if (target) {
-      db.updateTaskStatus(taskId, target.completed ? 'upcoming' : 'completed', true);
+      const nextCompleted = !target.completed;
+      const nextStatus = nextCompleted ? 'completed' : 'upcoming';
+      db.updateTaskStatus(taskId, nextStatus, true);
+      await taskService.updateTaskStatus(taskId, nextStatus, nextCompleted);
     }
   };
 
-  const handleAddTask = (newTask: TaskItem) => {
+  const handleAddTask = async (newTask: TaskItem) => {
     db.createTask(newTask);
+    await taskService.createTask(newTask);
   };
 
   const handleDeleteTask = (taskId: string) => {
     db.deleteTask(taskId);
   };
 
-  const handleTriggerCaregiverAlert = (location: string, voiceNote: boolean) => {
+  const handleTriggerCaregiverAlert = async (location: string, voiceNote: boolean) => {
     db.triggerSOS(activePatient.id);
+    await emergencyService.triggerSOS({
+      patientId: activePatient.id,
+      patientUid: userProfile?.uid,
+      patientName: activePatient.name,
+      location
+    });
   };
 
-  const handleResolveSos = (patientId: string) => {
+  const handleResolveSos = async (patientId: string) => {
     db.resolveSOS(patientId);
+    await emergencyService.resolveSOS(patientId, userName || 'Caregiver');
   };
 
   const handleUpdatePatient = (updated: PatientProfile) => {

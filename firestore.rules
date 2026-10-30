@@ -161,5 +161,19 @@ service cloud.firestore {
       allow delete: if isSignedIn() &&
                        (existing().caregiverUid == request.auth.uid || existing().patientUid == request.auth.uid);
     }
+
+    // 10. Moods collection
+    function isValidMood(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.patientId is string && data.patientId.size() <= 128 &&
+             data.mood in ['very_happy', 'happy', 'okay', 'sad', 'anxious'];
+    }
+
+    match /moods/{moodId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidMood(incoming());
+      allow update: if isSignedIn() && isValidMood(incoming()) && incoming().id == existing().id;
+      allow delete: if isSignedIn();
+    }
   }
 }

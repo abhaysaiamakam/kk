@@ -35,13 +35,20 @@ import {
   TaskItem, 
   ActivityLog, 
   RoutineSuggestion, 
-  TaskStatus 
+  TaskStatus,
+  EmergencyAlertItem,
+  MoodRecord 
 } from '../types';
 import { translations } from '../data/translations';
 import { db } from '../services/db';
 import { speechController } from '../utils/audio';
 import { aiClient } from '../services/aiClient';
 import { UserAvatar } from './UserAvatar';
+import { activityService } from '../services/activityService';
+import { taskService } from '../services/taskService';
+import { emergencyService } from '../services/emergencyService';
+import { moodService } from '../services/moodService';
+import { aiSummaryService } from '../services/aiSummaryService';
 
 interface CaregiverDashboardProps {
   caregiverName?: string;
@@ -87,8 +94,12 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   
   // Real-time state
-  const [activities, setActivities] = useState<ActivityLog[]>(() => db.getActivities(activePatient.id));
-  const [suggestions, setSuggestions] = useState<RoutineSuggestion[]>(() => db.getRoutineSuggestions(activePatient.id));
+  const [connectionStatus, setConnectionStatus] = useState<'Connecting...' | 'Live Connected' | 'Offline' | 'Connection Error'>('Connecting...');
+  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  const [tasksList, setTasksList] = useState<TaskItem[]>(tasks);
+  const [alerts, setAlerts] = useState<EmergencyAlertItem[]>([]);
+  const [moods, setMoods] = useState<MoodRecord[]>([]);
+  const [suggestions, setSuggestions] = useState<RoutineSuggestion[]>(() => db.getRoutineSuggestions(activePatient?.id || ''));
   const [speechState, setSpeechState] = useState(speechController.getState());
   const [playbackSpeed, setPlaybackSpeed] = useState<number>(1.0);
   const [speechLang, setSpeechLang] = useState<'en' | 'kn' | 'hi'>('en');
@@ -97,31 +108,117 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
   const t = translations[language];
 
-  // Subscribe to real-time events from db
+  // Online / Offline window listeners
   useEffect(() => {
-    const unsubscribeDb = db.subscribe((event) => {
-      setActivities(db.getActivities(activePatient.id));
-      setSuggestions(db.getRoutineSuggestions(activePatient.id));
-    });
+    const handleOnline = () => {
+      if (activePatient?.id) setConnectionStatus('Live Connected');
+    };
+    const handleOffline = () => setConnectionStatus('Offline');
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [activePatient?.id]);
+
+  // Real-time Firestore subscriptions for active patient
+  useEffect(() => {
+    if (!activePatient || !activePatient.id) {
+      setActivities([]);
+      setTasksList([]);
+      setAlerts([]);
+      setMoods([]);
+      setConnectionStatus('Live Connected');
+      return;
+    }
+
+    setConnectionStatus('Connecting...');
+
+    let isActOk = false;
+    let isTaskOk = false;
+    let isAlertOk = false;
+    let isMoodOk = false;
+
+    const updateConnectionState = () => {
+      if (navigator.onLine && (isActOk || isTaskOk || isAlertOk || isMoodOk)) {
+        setConnectionStatus('Live Connected');
+      }
+    };
+
+    // 1. Subscribe to Activities
+    const unAct = activityService.subscribeToActivities(
+      activePatient.id,
+      (acts) => {
+        setActivities(acts);
+        isActOk = true;
+        updateConnectionState();
+      },
+      () => setConnectionStatus('Connection Error')
+    );
+
+    // 2. Subscribe to Tasks / Medications
+    const unTask = taskService.subscribeToTasks(
+      activePatient.id,
+      (ts) => {
+        setTasksList(ts);
+        isTaskOk = true;
+        updateConnectionState();
+      },
+      () => setConnectionStatus('Connection Error')
+    );
+
+    // 3. Subscribe to SOS Alerts
+    const unAlert = emergencyService.subscribeToEmergencyAlerts(
+      activePatient.id,
+      (alts) => {
+        setAlerts(alts);
+        isAlertOk = true;
+        updateConnectionState();
+      },
+      () => setConnectionStatus('Connection Error')
+    );
+
+    // 4. Subscribe to Moods
+    const unMood = moodService.subscribeToMoodRecords(
+      activePatient.id,
+      (ms) => {
+        setMoods(ms);
+        isMoodOk = true;
+        updateConnectionState();
+      },
+      () => setConnectionStatus('Connection Error')
+    );
 
     const unsubscribeSpeech = speechController.subscribe(() => {
       setSpeechState(speechController.getState());
     });
 
     return () => {
-      unsubscribeDb();
+      unAct();
+      unTask();
+      unAlert();
+      unMood();
       unsubscribeSpeech();
     };
-  }, [activePatient.id]);
+  }, [activePatient?.id]);
 
   useEffect(() => {
     setDynamicSummary('');
-  }, [activePatient.id, summaryType]);
+  }, [activePatient?.id, summaryType]);
 
-  // Current AI summary text derived from server dual-provider AI or real saved records
-  const currentSummaryText = dynamicSummary || db.generateAISummary(activePatient.id, summaryType);
+  // Current AI summary text derived from real patient records in Firestore
+  const currentSummaryText = dynamicSummary || (activePatient ? aiSummaryService.generateGroundedSummary({
+    patient: activePatient,
+    tasks: tasksList,
+    activities: activities,
+    moods: moods,
+    alerts: alerts,
+    summaryType: summaryType
+  }) : 'No patient selected.');
 
   const handleGenerateAiReport = async () => {
+    if (!activePatient) return;
     setIsAiLoading(true);
     try {
       const report = await aiClient.getCaregiverSummary(activePatient.id, summaryType, language);
@@ -164,7 +261,12 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
   const handleApproveSuggestion = (id: string) => {
     db.approveRoutineSuggestion(id);
-    setSuggestions(db.getRoutineSuggestions(activePatient.id));
+    setSuggestions(db.getRoutineSuggestions(activePatient?.id || ''));
+  };
+
+  const handleResolveSosCall = async (patientId: string) => {
+    await emergencyService.resolveSOS(patientId, caregiverName || 'Caregiver');
+    onResolveSos(patientId);
   };
 
   const filteredPatients = patients.filter(
@@ -203,7 +305,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
     }
   };
 
-  const emergencyAlert = activePatient.status === 'sos_alert' || patients.some((p) => p.status === 'sos_alert');
+  const emergencyAlert = (activePatient && activePatient.status === 'sos_alert') || alerts.some(a => a.status === 'active') || patients.some((p) => p.status === 'sos_alert');
 
   return (
     <div className="min-h-[calc(100vh-65px)] bg-[#F8F7F0] p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto space-y-6">
@@ -213,12 +315,29 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         <div>
           <div className="flex items-center space-x-2">
             <h1 className="text-2xl sm:text-3xl font-bold text-[#263238] font-['Poppins']">
-              {t.goodMorning}, {caregiverName || 'Priya'}!
+              {t.goodMorning}, {caregiverName || 'Caregiver'}!
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center space-x-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Live Updates</span>
-            </span>
+            {connectionStatus === 'Live Connected' ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold flex items-center space-x-1 border border-emerald-300">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Live Connected</span>
+              </span>
+            ) : connectionStatus === 'Connecting...' ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-xs font-bold flex items-center space-x-1 border border-amber-300">
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <span>Connecting...</span>
+              </span>
+            ) : connectionStatus === 'Offline' ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700 text-xs font-bold flex items-center space-x-1 border border-gray-300">
+                <span className="w-2 h-2 rounded-full bg-gray-400" />
+                <span>Offline</span>
+              </span>
+            ) : (
+              <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-bold flex items-center space-x-1 border border-red-300">
+                <span className="w-2 h-2 rounded-full bg-red-500" />
+                <span>Connection Error</span>
+              </span>
+            )}
           </div>
           <p className="text-xs sm:text-sm text-gray-500 mt-1">
             Real-time synchronization active with enrolled patient devices.
@@ -245,20 +364,22 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-500" />
           </button>
 
-          <select
-            value={activePatient.id}
-            onChange={(e) => {
-              const found = patients.find((p) => p.id === e.target.value);
-              if (found) onSelectPatient(found);
-            }}
-            className="pl-3 pr-8 py-2.5 bg-white border border-gray-200 rounded-2xl text-xs sm:text-sm font-bold text-[#263238] shadow-xs cursor-pointer focus:ring-2 focus:ring-[#A8C9B0]"
-          >
-            {patients.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name} ({p.id}) {p.status === 'sos_alert' ? '🚨 SOS' : ''}
-              </option>
-            ))}
-          </select>
+          {patients.length > 0 && activePatient && (
+            <select
+              value={activePatient.id}
+              onChange={(e) => {
+                const found = patients.find((p) => p.id === e.target.value);
+                if (found) onSelectPatient(found);
+              }}
+              className="pl-3 pr-8 py-2.5 bg-white border border-gray-200 rounded-2xl text-xs sm:text-sm font-bold text-[#263238] shadow-xs cursor-pointer focus:ring-2 focus:ring-[#A8C9B0]"
+            >
+              {patients.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} ({p.id}) {p.status === 'sos_alert' ? '🚨 SOS' : ''}
+                </option>
+              ))}
+            </select>
+          )}
 
           <button
             onClick={onAddPatient}
@@ -270,8 +391,28 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
         </div>
       </div>
 
+      {/* Empty State when No Connected Patients */}
+      {patients.length === 0 && (
+        <div className="p-8 text-center bg-white rounded-3xl border border-gray-200 shadow-xs space-y-4 max-w-lg mx-auto my-8">
+          <div className="w-12 h-12 rounded-2xl bg-[#EEF6FB] text-[#1E4D6B] flex items-center justify-center mx-auto font-bold">
+            <Users className="w-6 h-6" />
+          </div>
+          <h3 className="text-lg font-bold text-[#263238] font-['Poppins']">No Patients Connected Yet</h3>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto leading-relaxed">
+            To start monitoring patient routines, medication adherence, and real-time SOS alerts, connect to your patient's device using their unique Patient ID.
+          </p>
+          <button
+            onClick={onAddPatient}
+            className="px-5 py-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white text-xs font-bold shadow-md cursor-pointer inline-flex items-center space-x-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Connect Patient Using ID</span>
+          </button>
+        </div>
+      )}
+
       {/* EMERGENCY SOS BANNER & LIVE TRACKING matching Section 10 */}
-      {emergencyAlert && (
+      {patients.length > 0 && activePatient && emergencyAlert && (
         <div className="p-4 sm:p-5 bg-red-50 border-2 border-red-300 rounded-3xl shadow-md space-y-3 animate-pulse">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center space-x-3.5">
@@ -298,7 +439,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               </button>
 
               <button
-                onClick={() => onResolveSos(activePatient.id)}
+                onClick={() => handleResolveSosCall(activePatient.id)}
                 className="px-3.5 py-2 rounded-xl bg-white border border-red-200 text-red-800 text-xs font-semibold hover:bg-red-100 cursor-pointer"
               >
                 Resolve Emergency
@@ -488,32 +629,58 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
             {/* Activities Table/List matching Section 6 */}
             <div className="divide-y divide-gray-100">
-              {activities.map((act) => (
-                <div key={act.id} className="py-3 flex items-center justify-between hover:bg-[#F8F7F0]/60 px-2 rounded-xl transition-colors">
-                  <div className="flex items-center space-x-3">
-                    <span className="text-xs font-bold text-gray-500 w-16">
-                      {act.scheduledTime}
-                    </span>
-                    <div>
-                      <h4 className="text-xs sm:text-sm font-bold text-[#263238]">
-                        {act.taskName}
-                      </h4>
-                      <div className="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5">
-                        <span className="capitalize">{act.category}</span>
-                        <span>•</span>
-                        <span>{(act.source || 'system').replace('_', ' ')}</span>
+              {(() => {
+                const displayActivities: ActivityLog[] = activities.length > 0 
+                  ? activities 
+                  : tasksList.map(t => ({
+                      id: t.id,
+                      patientId: t.patientId,
+                      taskName: t.title,
+                      category: t.category,
+                      scheduledTime: t.time,
+                      completedTime: t.completedTime,
+                      status: t.status || (t.completed ? 'completed' : 'upcoming'),
+                      patientConfirmed: t.completed,
+                      source: t.source || 'caregiver',
+                      timestamp: t.completedAt || new Date().toISOString()
+                    }));
+
+                if (displayActivities.length === 0) {
+                  return (
+                    <div className="py-8 text-center text-xs text-gray-500 font-medium space-y-1">
+                      <p>No activity or medication records logged for {activePatient?.name || 'this patient'} yet.</p>
+                      <p className="text-[11px] text-gray-400">Use "Add Task" above to assign daily routines or medications.</p>
+                    </div>
+                  );
+                }
+
+                return displayActivities.map((act) => (
+                  <div key={act.id} className="py-3 flex items-center justify-between hover:bg-[#F8F7F0]/60 px-2 rounded-xl transition-colors">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-xs font-bold text-gray-500 w-16">
+                        {act.scheduledTime}
+                      </span>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-bold text-[#263238]">
+                          {act.taskName}
+                        </h4>
+                        <div className="flex items-center space-x-2 text-[10px] text-gray-400 mt-0.5">
+                          <span className="capitalize">{act.category}</span>
+                          <span>•</span>
+                          <span>{(act.source || 'system').replace('_', ' ')}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  <div className="flex items-center space-x-3">
-                    {getStatusBadge(act.status)}
-                    <span className="text-xs font-mono text-gray-500 w-16 text-right">
-                      {act.completedTime || '—'}
-                    </span>
+                    <div className="flex items-center space-x-3">
+                      {getStatusBadge(act.status)}
+                      <span className="text-xs font-mono text-gray-500 w-16 text-right">
+                        {act.completedTime || '—'}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
 
           </div>

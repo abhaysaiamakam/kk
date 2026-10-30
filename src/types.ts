@@ -245,6 +245,7 @@ export interface EmergencyAlertItem {
   id: string;
   patientId: string;
   patientName: string;
+  time?: string;
   timestamp: string;
   location: string;
   latitude?: number;
