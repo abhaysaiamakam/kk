@@ -199,7 +199,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="font-bold text-sm sm:text-base text-[#263238] font-['Poppins']">
-                  MindCare Voice Companion
+                  KeenKeep Voice Companion
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-[#A8C9B0]/30 text-[#2D4F3B] text-[10px] font-bold">
                   AI Assistant
@@ -233,7 +233,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       </div>
 
       {/* NEXT TASK (Most Prominent Element) matching Section 2 */}
-      {nextTask && (
+      {nextTask ? (
         <div 
           onClick={() => onOpenTaskReminder(nextTask)}
           className="relative bg-white rounded-3xl p-5 sm:p-6 shadow-md border-2 border-[#A8C9B0]/60 cursor-pointer hover:shadow-lg transition-all group"
@@ -288,6 +288,16 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-3xl p-6 shadow-xs border border-gray-200/80 text-center space-y-2">
+          <div className="w-12 h-12 rounded-2xl bg-[#A8C9B0]/20 text-[#2D4F3B] flex items-center justify-center mx-auto">
+            <Clock className="w-6 h-6" />
+          </div>
+          <h3 className="text-base font-bold text-[#263238]">No reminders added yet.</h3>
+          <p className="text-xs text-gray-500 max-w-sm mx-auto">
+            Your daily tasks, medication schedules, and wellness routines will appear here as you or your caregiver add them.
+          </p>
         </div>
       )}
 
@@ -548,7 +558,7 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
             <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
           <span className="max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap text-xs font-bold pl-0 group-hover:pl-2">
-            Ask MindCare
+            Ask KeenKeep
           </span>
         </button>
       </div>

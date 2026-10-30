@@ -103,6 +103,10 @@ export interface UserProfileDocument {
   preferredLanguage: Language;
   photoURL?: string;
   patientId?: string;
+  age?: number | string;
+  dateOfBirth?: string;
+  phone?: string;
+  bloodGroup?: string;
   createdAt: string;
   updatedAt: string;
   isActive: boolean;

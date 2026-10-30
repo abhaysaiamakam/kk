@@ -219,27 +219,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Settings className="w-5 h-5 text-[#263238]/70" />
           </button>
 
-          {/* Quick Role Switcher */}
-          {currentRole && (
-            <button
-              onClick={() => onRoleSwitch(currentRole === 'patient' ? 'caregiver' : 'patient')}
-              className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-[#A8C9B0]/25 text-[#2D4F3B] hover:bg-[#A8C9B0]/40 text-xs font-semibold transition-colors"
-              title="Switch between Patient and Caretaker views"
-            >
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">
-                Switch to {currentRole === 'patient' ? 'Caretaker' : 'Patient'}
-              </span>
-            </button>
-          )}
-
-          {/* Logout / Reset */}
+          {/* Logout / Exit */}
           <button
             onClick={onLogout}
-            className="text-xs text-gray-500 hover:text-red-600 px-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
+            className="text-xs font-semibold text-[#3B664B] hover:text-red-600 px-2.5 py-1.5 rounded-xl hover:bg-red-50 border border-gray-200 transition-colors cursor-pointer"
             title="Sign Out"
           >
-            Exit
+            Sign Out
           </button>
         </div>
 

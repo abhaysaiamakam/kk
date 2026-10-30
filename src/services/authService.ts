@@ -101,6 +101,9 @@ export const authService = {
     role: 'patient' | 'caregiver';
     preferredLanguage: Language;
     photoURL?: string;
+    ageOrDob?: string;
+    phone?: string;
+    bloodGroup?: string;
   }): Promise<{ user: FirebaseUser; profile: UserProfileDocument }> {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
@@ -129,6 +132,9 @@ export const authService = {
       preferredLanguage: params.preferredLanguage,
       photoURL: params.photoURL || user.photoURL || undefined,
       patientId: params.role === 'patient' ? `P-${user.uid.slice(0, 6).toUpperCase()}` : undefined,
+      age: params.ageOrDob || undefined,
+      phone: params.phone || undefined,
+      bloodGroup: params.bloodGroup || undefined,
       createdAt: now,
       updatedAt: now,
       isActive: true
@@ -150,17 +156,26 @@ export const authService = {
   async createGoogleUserProfile(
     user: FirebaseUser,
     role: 'patient' | 'caregiver',
-    preferredLanguage: Language
+    preferredLanguage: Language,
+    extraFields?: {
+      fullName?: string;
+      ageOrDob?: string;
+      phone?: string;
+      bloodGroup?: string;
+    }
   ): Promise<UserProfileDocument> {
     const now = new Date().toISOString();
     const profile: UserProfileDocument = {
       uid: user.uid,
-      fullName: user.displayName || 'MindCare User',
+      fullName: extraFields?.fullName || user.displayName || 'KeenKeep User',
       email: user.email || '',
       role,
       preferredLanguage,
       photoURL: user.photoURL || undefined,
       patientId: role === 'patient' ? `P-${user.uid.slice(0, 6).toUpperCase()}` : undefined,
+      age: extraFields?.ageOrDob || undefined,
+      phone: extraFields?.phone || undefined,
+      bloodGroup: extraFields?.bloodGroup || undefined,
       createdAt: now,
       updatedAt: now,
       isActive: true

@@ -81,8 +81,24 @@ export default function App() {
   const [showNotificationCenterModal, setShowNotificationCenterModal] = useState(false);
   const [showVoiceCompanionModal, setShowVoiceCompanionModal] = useState(false);
 
-  // Active patient object
-  const activePatient = patients.find((p) => p.id === activePatientId) || patients[0];
+  // Active patient object - if user is patient, construct from their real Firestore profile
+  const userPatientProfile: PatientProfile | null = userProfile && userRole === 'patient' ? {
+    id: userProfile.patientId || `P-${userProfile.uid.slice(0, 6).toUpperCase()}`,
+    name: userProfile.fullName || 'Patient',
+    age: userProfile.age ? String(userProfile.age) : 'Not added yet',
+    gender: 'Not added yet',
+    bloodGroup: userProfile.bloodGroup || 'Not added yet',
+    homeLocation: 'Not added yet',
+    liveLocationEnabled: false,
+    dateOfBirth: userProfile.dateOfBirth || (typeof userProfile.age === 'string' ? userProfile.age : 'Not added yet'),
+    avatar: userProfile.photoURL || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=400&q=80',
+    status: 'all_good',
+    streakDays: 0,
+    overallCompletion: 0,
+    caregiverId: 'Not added yet'
+  } : null;
+
+  const activePatient = userPatientProfile || patients.find((p) => p.id === activePatientId) || patients[0];
   const activePatientTasks = tasks.filter((t) => t.patientId === activePatient.id);
 
   // Global Firebase Auth State Listener
@@ -107,7 +123,7 @@ export default function App() {
               setActivePatientId(profile.patientId);
             }
           } else {
-            setUserName(firebaseUser.displayName || 'MindCare User');
+            setUserName(firebaseUser.displayName || 'KeenKeep User');
           }
         } catch (err) {
           console.warn('Could not fetch Firestore user profile:', err);
@@ -143,7 +159,7 @@ export default function App() {
     setIsLoggedIn(true);
     setUserRole(profile.role);
     setLanguage(profile.preferredLanguage);
-    setUserName(profile.fullName || user.displayName || 'MindCare User');
+    setUserName(profile.fullName || user.displayName || 'KeenKeep User');
     if (profile.patientId) {
       setActivePatientId(profile.patientId);
     }
@@ -218,7 +234,7 @@ export default function App() {
             <path d="M17.5,3 C17.5,3 15.2,5.3 14,8.5 C12.8,11.7 13.5,14 13.5,14 C13.5,14 11.2,13.3 8,14.5 C4.8,15.7 2.5,18 2.5,18 C2.5,18 4.8,20.3 8,19.1 C11.2,17.9 11.9,15.6 11.9,15.6 C11.9,15.6 14.2,16.3 17.4,15.1 C20.6,13.9 22.9,11.6 22.9,11.6 C22.9,11.6 20.6,9.3 17.4,10.5 C14.2,11.7 13.5,14 13.5,14 C13.5,14 14.2,11.7 15.4,8.5 C16.6,5.3 17.5,3 17.5,3 Z" />
           </svg>
         </div>
-        <h2 className="text-xl font-bold text-[#263238] font-['Poppins']">MindCare</h2>
+        <h2 className="text-xl font-bold text-[#263238] font-['Poppins']">KeenKeep</h2>
         <p className="text-xs text-[#3B664B] mt-1 font-medium">Connecting to secure health records...</p>
       </div>
     );
@@ -260,7 +276,7 @@ export default function App() {
         <>
           <Navbar
             currentRole="patient"
-            onRoleSwitch={(role) => setUserRole(role)}
+            onRoleSwitch={() => {}}
             language={language}
             onLanguageChange={setLanguage}
             onOpenSettings={() => setShowSettingsModal(true)}
@@ -304,7 +320,7 @@ export default function App() {
         <>
           <Navbar
             currentRole="caregiver"
-            onRoleSwitch={(role) => setUserRole(role)}
+            onRoleSwitch={() => {}}
             language={language}
             onLanguageChange={setLanguage}
             onOpenSettings={() => setShowSettingsModal(true)}

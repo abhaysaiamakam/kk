@@ -12,7 +12,9 @@ import {
   Loader2,
   Heart,
   ShieldCheck,
-  Globe
+  Calendar,
+  Phone,
+  Droplet
 } from 'lucide-react';
 import { Language, UserRole } from '../types';
 import { translations } from '../data/translations';
@@ -38,13 +40,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
   const [mode, setMode] = useState<AuthMode>('login');
 
   // Form Fields
-  const [emailOrUsername, setEmailOrUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [fullName, setFullName] = useState('');
   const [registerRole, setRegisterRole] = useState<'patient' | 'caregiver'>('patient');
   const [selectedLanguage, setSelectedLanguage] = useState<Language>(language);
   const [rememberMe, setRememberMe] = useState(true);
+
+  // Role-Specific Fields
+  const [ageOrDob, setAgeOrDob] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [bloodGroup, setBloodGroup] = useState('');
 
   // Pending Google User for Role Selection
   const [pendingGoogleUser, setPendingGoogleUser] = useState<FirebaseUser | null>(null);
@@ -78,7 +87,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       return 'Google sign-in was closed before completion. Please try again.';
     }
     if (code === 'auth/popup-blocked') {
-      return 'Google sign-in popup was blocked by your browser. Please allow popups for MindCare.';
+      return 'Google sign-in popup was blocked by your browser. Please allow popups for KeenKeep.';
     }
     if (code === 'auth/too-many-requests') {
       return 'Too many unsuccessful attempts. Please wait a few moments or reset your password.';
@@ -96,7 +105,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!emailOrUsername.trim()) {
+    if (!email.trim()) {
       setErrorMessage('Please enter your email address.');
       return;
     }
@@ -107,14 +116,14 @@ export const LoginView: React.FC<LoginViewProps> = ({
 
     setIsLoading(true);
     try {
-      const result = await authService.signInWithEmail(emailOrUsername, password, rememberMe);
+      const result = await authService.signInWithEmail(email, password, rememberMe);
       
       if (!result.profile) {
         // Fallback profile if Firestore user doc missing
         const fallbackProfile: UserProfileDocument = {
           uid: result.user.uid,
-          fullName: result.user.displayName || emailOrUsername.split('@')[0],
-          email: result.user.email || emailOrUsername,
+          fullName: result.user.displayName || email.split('@')[0],
+          email: result.user.email || email,
           role: 'patient',
           preferredLanguage: selectedLanguage,
           createdAt: new Date().toISOString(),
@@ -142,7 +151,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       const result = await authService.signInWithGoogle(rememberMe);
 
       if (result.isNewUser || !result.profile) {
-        // Prompt new Google user to select role and preferred language
+        // Prompt new Google user to select role and enter required profile details
         setPendingGoogleUser(result.user);
         setFullName(result.user.displayName || '');
         setMode('google_setup');
@@ -167,7 +176,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       setErrorMessage('Please enter your full name.');
       return;
     }
-    if (!emailOrUsername.trim()) {
+    if (!email.trim()) {
       setErrorMessage('Please enter a valid email address.');
       return;
     }
@@ -175,15 +184,27 @@ export const LoginView: React.FC<LoginViewProps> = ({
       setErrorMessage('Password must be at least 6 characters.');
       return;
     }
+    if (password !== confirmPassword) {
+      setErrorMessage('Passwords do not match. Please verify your password.');
+      return;
+    }
+
+    if (registerRole === 'patient' && !ageOrDob.trim()) {
+      setErrorMessage('Please enter your age or date of birth.');
+      return;
+    }
 
     setIsLoading(true);
     try {
       const { user, profile } = await authService.registerWithEmail({
         fullName: fullName.trim(),
-        email: emailOrUsername.trim(),
+        email: email.trim(),
         password,
         role: registerRole,
-        preferredLanguage: selectedLanguage
+        preferredLanguage: selectedLanguage,
+        ageOrDob: ageOrDob.trim() || undefined,
+        phone: phoneNumber.trim() || undefined,
+        bloodGroup: bloodGroup.trim() || undefined
       });
 
       if (onLanguageChange && selectedLanguage !== language) {
@@ -203,13 +224,24 @@ export const LoginView: React.FC<LoginViewProps> = ({
     e.preventDefault();
     if (!pendingGoogleUser) return;
 
+    if (registerRole === 'patient' && !ageOrDob.trim()) {
+      setErrorMessage('Please enter your age or date of birth.');
+      return;
+    }
+
     setErrorMessage(null);
     setIsLoading(true);
     try {
       const profile = await authService.createGoogleUserProfile(
         pendingGoogleUser,
         registerRole,
-        selectedLanguage
+        selectedLanguage,
+        {
+          fullName: fullName.trim() || pendingGoogleUser.displayName || undefined,
+          ageOrDob: ageOrDob.trim() || undefined,
+          phone: phoneNumber.trim() || undefined,
+          bloodGroup: bloodGroup.trim() || undefined
+        }
       );
 
       if (onLanguageChange && selectedLanguage !== language) {
@@ -230,16 +262,16 @@ export const LoginView: React.FC<LoginViewProps> = ({
     setErrorMessage(null);
     setSuccessMessage(null);
 
-    if (!emailOrUsername.trim()) {
+    if (!email.trim()) {
       setErrorMessage('Please enter your registered email address.');
       return;
     }
 
     setIsLoading(true);
     try {
-      await authService.sendPasswordReset(emailOrUsername.trim());
+      await authService.sendPasswordReset(email.trim());
       setSuccessMessage(
-        `A password reset link has been sent to ${emailOrUsername.trim()}. Please check your inbox and follow the instructions.`
+        `A password reset link has been sent to ${email.trim()}. Please check your inbox.`
       );
     } catch (err: any) {
       setErrorMessage(formatAuthError(err));
@@ -251,7 +283,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
   return (
     <div className="relative min-h-screen w-full flex items-center justify-center p-4 bg-[#F8F7F0] overflow-y-auto py-12">
       
-      {/* Scenic Nature Background matching MindCare Design */}
+      {/* Scenic Nature Background matching KeenKeep Design */}
       <div 
         className="fixed inset-0 bg-cover bg-center transition-all duration-1000 scale-105"
         style={{
@@ -265,7 +297,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
       {/* Main Authentication Card */}
       <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl p-7 sm:p-9 border border-white/70 text-center transition-all my-auto">
         
-        {/* MindCare Emblem */}
+        {/* KeenKeep Emblem */}
         <div className="mx-auto w-16 h-16 rounded-3xl bg-[#A8C9B0] flex items-center justify-center shadow-md mb-3 text-[#2D4F3B]">
           <svg className="w-9 h-9" viewBox="0 0 24 24" fill="currentColor">
             <path d="M17.5,3 C17.5,3 15.2,5.3 14,8.5 C12.8,11.7 13.5,14 13.5,14 C13.5,14 11.2,13.3 8,14.5 C4.8,15.7 2.5,18 2.5,18 C2.5,18 4.8,20.3 8,19.1 C11.2,17.9 11.9,15.6 11.9,15.6 C11.9,15.6 14.2,16.3 17.4,15.1 C20.6,13.9 22.9,11.6 22.9,11.6 C22.9,11.6 20.6,9.3 17.4,10.5 C14.2,11.7 13.5,14 13.5,14 C13.5,14 14.2,11.7 15.4,8.5 C16.6,5.3 17.5,3 17.5,3 Z" />
@@ -309,20 +341,20 @@ export const LoginView: React.FC<LoginViewProps> = ({
             </div>
 
             <form onSubmit={handleEmailLogin} className="space-y-3.5 text-left">
-              {/* Email / Username Input */}
+              {/* Email Input */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  {t.emailOrUsername}
+                  Email Address
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
                     <Mail className="w-4 h-4" />
                   </span>
                   <input
-                    type="text"
-                    value={emailOrUsername}
-                    onChange={(e) => setEmailOrUsername(e.target.value)}
-                    placeholder="e.g. aarav@example.com"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="name@example.com"
                     autoComplete="email"
                     className="w-full pl-10 pr-4 py-3 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
                     required
@@ -467,15 +499,51 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 {t.registerTitle}
               </h2>
               <p className="text-xs text-gray-500">
-                Join our supportive healthcare community
+                Choose your role to get started with KeenKeep
               </p>
             </div>
 
             <form onSubmit={handleRegister} className="space-y-3 text-left">
+              {/* Role Selection */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  I am registering as:
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setRegisterRole('patient')}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                      registerRole === 'patient'
+                        ? 'border-[#3B664B] bg-[#EAF2EC] text-[#2D4F3B] shadow-xs'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <Heart className="w-5 h-5 mb-1 text-[#3B664B]" />
+                    <span className="text-xs font-bold">Patient</span>
+                    <span className="text-[10px] text-gray-500">Personal care</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRegisterRole('caregiver')}
+                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                      registerRole === 'caregiver'
+                        ? 'border-[#3B664B] bg-[#EAF2EC] text-[#2D4F3B] shadow-xs'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                    }`}
+                  >
+                    <ShieldCheck className="w-5 h-5 mb-1 text-[#3B664B]" />
+                    <span className="text-xs font-bold">Caregiver</span>
+                    <span className="text-[10px] text-gray-500">Manage care</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Full Name */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  {t.fullName}
+                  Full Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -485,17 +553,60 @@ export const LoginView: React.FC<LoginViewProps> = ({
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    placeholder="e.g. Aarav Sharma"
+                    placeholder="Your full name"
                     className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
                     required
                   />
                 </div>
               </div>
 
+              {/* Patient-Specific Fields */}
+              {registerRole === 'patient' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Date of Birth or Age <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <Calendar className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={ageOrDob}
+                      onChange={(e) => setAgeOrDob(e.target.value)}
+                      placeholder="e.g. 68 or 15 Apr 1957"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Caregiver-Specific Fields */}
+              {registerRole === 'caregiver' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Phone Number (Optional)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <Phone className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="tel"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      placeholder="+91 98765 43210"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Email */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Email Address
+                  Email Address <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -503,8 +614,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </span>
                   <input
                     type="email"
-                    value={emailOrUsername}
-                    onChange={(e) => setEmailOrUsername(e.target.value)}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
                     autoComplete="email"
                     className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
@@ -516,7 +627,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               {/* Password */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  {t.password} (min. 6 characters)
+                  Password <span className="text-red-500">*</span> (min. 6 chars)
                 </label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
@@ -541,38 +652,30 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
               </div>
 
-              {/* Role Selection */}
+              {/* Confirm Password */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  {t.selectRole}
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Confirm Password <span className="text-red-500">*</span>
                 </label>
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                    <Lock className="w-4 h-4" />
+                  </span>
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete="new-password"
+                    className="w-full pl-10 pr-11 py-2.5 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
+                    required
+                  />
                   <button
                     type="button"
-                    onClick={() => setRegisterRole('patient')}
-                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
-                      registerRole === 'patient'
-                        ? 'border-[#3B664B] bg-[#EAF2EC] text-[#2D4F3B] shadow-xs'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                    }`}
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-gray-400 hover:text-gray-600 cursor-pointer"
                   >
-                    <Heart className="w-4 h-4 mb-1 text-[#3B664B]" />
-                    <span className="text-xs font-bold">Patient</span>
-                    <span className="text-[10px] text-gray-500">Personal wellness</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setRegisterRole('caregiver')}
-                    className={`p-3 rounded-2xl border text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
-                      registerRole === 'caregiver'
-                        ? 'border-[#3B664B] bg-[#EAF2EC] text-[#2D4F3B] shadow-xs'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
-                    }`}
-                  >
-                    <ShieldCheck className="w-4 h-4 mb-1 text-[#3B664B]" />
-                    <span className="text-xs font-bold">Caregiver</span>
-                    <span className="text-[10px] text-gray-500">Manage loved ones</span>
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
@@ -659,8 +762,8 @@ export const LoginView: React.FC<LoginViewProps> = ({
                   </span>
                   <input
                     type="email"
-                    value={emailOrUsername}
-                    onChange={(e) => setEmailOrUsername(e.target.value)}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
                     autoComplete="email"
                     className="w-full pl-10 pr-4 py-3 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
@@ -709,10 +812,10 @@ export const LoginView: React.FC<LoginViewProps> = ({
           <div>
             <div className="mb-4 text-center">
               <h2 className="text-lg sm:text-xl font-bold text-[#263238] mb-0.5">
-                Welcome to MindCare!
+                Welcome to KeenKeep!
               </h2>
               <p className="text-xs text-gray-500">
-                Hi {pendingGoogleUser.displayName || 'there'}! Please choose your role to configure your personalized dashboard.
+                Hi {pendingGoogleUser.displayName || 'there'}! Please select your fixed role to setup your profile.
               </p>
             </div>
 
@@ -720,7 +823,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
               {/* Role Selection */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Select Your Role
+                  Select Your Account Role
                 </label>
                 <div className="grid grid-cols-2 gap-2.5">
                   <button
@@ -753,6 +856,28 @@ export const LoginView: React.FC<LoginViewProps> = ({
                 </div>
               </div>
 
+              {/* Patient-Specific Fields */}
+              {registerRole === 'patient' && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                    Date of Birth or Age <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-gray-400">
+                      <Calendar className="w-4 h-4" />
+                    </span>
+                    <input
+                      type="text"
+                      value={ageOrDob}
+                      onChange={(e) => setAgeOrDob(e.target.value)}
+                      placeholder="e.g. 68 or 15 Apr 1957"
+                      className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-[#F8F7F0] border border-gray-200 text-[#263238] text-sm focus:outline-hidden focus:ring-2 focus:ring-[#A8C9B0] transition-all"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               {/* Preferred Language */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -770,7 +895,7 @@ export const LoginView: React.FC<LoginViewProps> = ({
                           : 'border-gray-200 text-gray-600 hover:bg-gray-50'
                       }`}
                     >
-                      {lang === 'en' ? 'English' : lang === 'kn' ? 'ಕನ್ನಡ' : 'हिन्दी'}
+                      {lang === 'en' ? 'English' : lang === 'kn' ? 'ಕನ್ನಡ' : 'ಹಿಂ ದೀ'}
                     </button>
                   ))}
                 </div>

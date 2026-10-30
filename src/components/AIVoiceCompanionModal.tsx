@@ -79,11 +79,11 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
   const getGreeting = (lang: Language) => {
     const firstName = patient.name.split(' ')[0];
     if (lang === 'kn') {
-      return `ನಮಸ್ಕಾರ ${firstName}! ನಾನು ನಿಮ್ಮ ಮೈಂಡ್‌ಕೇರ್ ಧ್ವನಿ ಸಹಾಯಕ. ನಾನು ಇಂದು ನಿಮಗೆ ಹೇಗೆ ನೆರವಾಗಲಿ?`;
+      return `ನಮಸ್ಕಾರ ${firstName}! ನಾನು ನಿಮ್ಮ ಕೀನ್‌ಕೀಪ್ ಧ್ವನಿ ಸಹಾಯಕ. ನಾನು ಇಂದು ನಿಮಗೆ ಹೇಗೆ ನೆರವಾಗಲಿ?`;
     } else if (lang === 'hi') {
-      return `नमस्ते ${firstName}! मैं आपका माइंडकेयर वॉयस साथी हूँ। आज मैं आपकी क्या सहायता कर सकता हूँ?`;
+      return `नमस्ते ${firstName}! मैं आपका कीनकीप वॉयस साथी हूँ। आज मैं आपकी क्या सहायता कर सकता हूँ?`;
     }
-    return `Hello ${firstName}! I am your MindCare voice companion. How can I help you feel peaceful and comfortable today?`;
+    return `Hello ${firstName}! I am your KeenKeep voice companion. How can I help you feel peaceful and comfortable today?`;
   };
 
   const [messages, setMessages] = useState<VoiceCompanionMessage[]>(() => [
@@ -447,7 +447,7 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
           >
             <div className="flex items-center space-x-1.5">
               <Sparkles className="w-3.5 h-3.5 text-[#A8C9B0]" />
-              <span className="text-xs font-bold font-['Poppins']">MindCare Voice</span>
+              <span className="text-xs font-bold font-['Poppins']">KeenKeep Voice</span>
             </div>
             <span className="text-[10px] text-[#A8C9B0] block">
               {assistantState === 'listening'
@@ -488,7 +488,7 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
         className="w-full max-w-2xl bg-[#F8F7F0] rounded-3xl sm:rounded-[36px] shadow-2xl border-2 border-[#A8C9B0] flex flex-col max-h-[92vh] overflow-hidden"
         role="dialog"
         aria-modal="true"
-        aria-label="MindCare AI Voice Companion"
+        aria-label="KeenKeep AI Voice Companion"
       >
         
         {/* Top Header */}
@@ -500,7 +500,7 @@ export const AIVoiceCompanionModal: React.FC<AIVoiceCompanionModalProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h3 className="font-bold text-base sm:text-lg text-[#263238] font-['Poppins']">
-                  MindCare Voice Companion
+                  KeenKeep Voice Companion
                 </h3>
                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
               </div>

@@ -1,6 +1,6 @@
 {
-  "name": "MindCare: Patient & Caregiver Platform",
-  "description": "A calm, intelligent patient-care and caregiver-assistance platform inspired by compassionate design.",
+  "name": "KeenKeep: Patient & Caregiver Platform",
+  "description": "Better Days, Together. A calm, intelligent patient-care and caregiver-assistance platform.",
   "requestFramePermissions": ["geolocation", "microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
