@@ -1,0 +1,6 @@
+{
+  "name": "MindCare: Patient & Caregiver Platform",
+  "description": "A calm, intelligent patient-care and caregiver-assistance platform inspired by compassionate design.",
+  "requestFramePermissions": ["geolocation", "microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
