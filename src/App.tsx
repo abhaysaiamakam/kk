@@ -249,12 +249,10 @@ export default function App() {
 
   // Real-time task synchronization handlers
   const handleConfirmTask = async (taskId: string) => {
-    db.updateTaskStatus(taskId, 'completed', true);
     await taskService.updateTaskStatus(taskId, 'completed', true);
   };
 
   const handleSnoozeTask = async (taskId: string) => {
-    db.updateTaskStatus(taskId, 'snoozed', true);
     await taskService.updateTaskStatus(taskId, 'snoozed', false);
   };
 
@@ -263,18 +261,16 @@ export default function App() {
     if (target) {
       const nextCompleted = !target.completed;
       const nextStatus = nextCompleted ? 'completed' : 'upcoming';
-      db.updateTaskStatus(taskId, nextStatus, true);
       await taskService.updateTaskStatus(taskId, nextStatus, nextCompleted);
     }
   };
 
   const handleAddTask = async (newTask: TaskItem) => {
-    db.createTask(newTask);
     await taskService.createTask(newTask);
   };
 
-  const handleDeleteTask = (taskId: string) => {
-    db.deleteTask(taskId);
+  const handleDeleteTask = async (taskId: string) => {
+    await taskService.deleteTask(taskId);
   };
 
   const handleUpdatePatient = (updated: PatientProfile) => {
