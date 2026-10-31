@@ -18,14 +18,28 @@ import {
 import { TaskItem, PatientProfile } from '../types';
 import { taskService } from '../services/taskService';
 
+const getLocalDateInputValue = () => {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 10);
+};
+
+const formatScheduledTime = (value: string) => {
+  const [hours, minutes] = value.split(':').map(Number);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHour = hours % 12 || 12;
+  return `${String(displayHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${period}`;
+};
+
 interface RoutineSchedulerModalProps {
   isOpen: boolean;
   onClose: () => void;
   tasks: TaskItem[];
   activePatient: PatientProfile;
   connectedPatients?: PatientProfile[];
-  onAddTask: (newTask: TaskItem) => void;
-  onDeleteTask: (taskId: string) => void;
+  onAddTask: (newTask: TaskItem) => Promise<void> | void;
+  onDeleteTask: (taskId: string) => Promise<void> | void;
   caregiverUid?: string;
   caregiverName?: string;
 }
@@ -55,9 +69,8 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
   // Form Fields
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [time, setTime] = useState('10:00 AM');
-  const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [dueTime, setDueTime] = useState('10:00 AM');
+  const [dueDate, setDueDate] = useState<string>(getLocalDateInputValue);
+  const [dueTime, setDueTime] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high' | 'urgent'>('medium');
   const [category, setCategory] = useState<'medicine' | 'exercise' | 'calm' | 'meal' | 'activity'>('medicine');
   const [dosage, setDosage] = useState('');
@@ -106,6 +119,16 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
       return;
     }
 
+    if (!dueTime) {
+      setFeedback({ type: 'error', message: 'Please choose a due time.' });
+      return;
+    }
+
+    if (!dueDate) {
+      setFeedback({ type: 'error', message: 'Please choose a due date.' });
+      return;
+    }
+
     if (!selectedPatientId || !targetPatient) {
       setFeedback({ type: 'error', message: 'Please select a valid connected patient.' });
       return;
@@ -120,7 +143,8 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
     setFeedback({ type: 'info', message: 'Saving task to Firebase...' });
 
     try {
-      const taskId = `task-${Date.now()}`;
+      const displayTime = formatScheduledTime(dueTime);
+      const taskId = `task-${crypto.randomUUID()}`;
       const newTask: TaskItem = {
         id: taskId,
         patientId: targetPatient.id,
@@ -130,9 +154,9 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
         assignedByName: caregiverName || 'Caregiver',
         title: title.trim(),
         description: description.trim() || undefined,
-        time: time || dueTime || '10:00 AM',
-        dueDate: dueDate || new Date().toISOString().split('T')[0],
-        dueTime: dueTime || time || '10:00 AM',
+        time: displayTime,
+        dueDate,
+        dueTime: displayTime,
         priority: priority,
         category: category,
         dosage: dosage.trim() || undefined,
@@ -147,16 +171,14 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
         source: 'caregiver_created'
       };
 
-      // Write directly to Firestore & wait for server confirmation
-      await taskService.createTask(newTask);
+      // The parent persists once to Firestore; its onSnapshot listener publishes the saved task.
+      await onAddTask(newTask);
 
       // Confirmation feedback
       setFeedback({
         type: 'success',
         message: `Task created successfully! Task assigned to ${targetPatient.name}.`
       });
-
-      onAddTask(newTask);
 
       // Reset form after short delay so caregiver sees confirmation
       setTimeout(() => {
@@ -167,6 +189,8 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
         setDescription('');
         setDosage('');
         setNotes('');
+        setDueDate(getLocalDateInputValue());
+        setDueTime('');
       }, 1200);
 
     } catch (err: any) {
@@ -181,8 +205,7 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
 
   const handleDelete = async (taskId: string) => {
     try {
-      onDeleteTask(taskId);
-      await taskService.deleteTask(taskId);
+      await onDeleteTask(taskId);
     } catch (err: any) {
       console.error('[RoutineSchedulerModal] Error deleting task:', err);
     }
@@ -363,6 +386,7 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
                     type="date"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
+                    required
                     className="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-xl font-medium"
                   />
                 </div>
@@ -370,10 +394,10 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
                 <div>
                   <label className="text-[11px] font-bold text-gray-700 block mb-1">Due Time</label>
                   <input
-                    type="text"
-                    placeholder="e.g. 10:00 AM"
+                    type="time"
                     value={dueTime}
                     onChange={(e) => setDueTime(e.target.value)}
+                    required
                     className="w-full text-xs p-2.5 bg-white border border-gray-300 rounded-xl font-medium"
                   />
                 </div>
