@@ -16,6 +16,7 @@ import {
 import { PatientProfile, Language, EmergencyAlertItem } from '../types';
 import { translations } from '../data/translations';
 import { db } from '../services/db';
+import { emergencyService } from '../services/emergencyService';
 import { playSosBeep } from '../utils/audio';
 
 interface SOSModalProps {
@@ -42,39 +43,63 @@ export const SOSModal: React.FC<SOSModalProps> = ({
 
   const t = translations[language];
 
-  // Request actual Geolocation if available
+  // Continuous real-time movement tracking via watchPosition while SOS is active
   useEffect(() => {
-    if (isOpen && 'geolocation' in navigator) {
-      navigator.geolocation.getCurrentPosition(
+    let watchId: number | null = null;
+    if (step === 'active_live_tracking' && 'geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          setLiveCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          setAccuracy(Math.round(pos.coords.accuracy) || 5);
-          setLocationStatus('GPS signal locked');
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const acc = Math.round(pos.coords.accuracy) || 5;
+          setLiveCoords({ lat, lng });
+          setAccuracy(acc);
+          setLocationStatus('GPS active • Tracking movement');
           setLastUpdated('Just now');
+
+          // Real-time Firestore update
+          emergencyService.updateSOSLocation(patient.id, lat, lng, acc);
         },
         (err) => {
-          console.warn('Geolocation error:', err.message);
+          console.warn('watchPosition error:', err.message);
           setLocationStatus('Location unavailable');
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
       );
-    } else {
-      setLocationStatus('Location unavailable');
     }
-  }, [isOpen]);
+    return () => {
+      if (watchId !== null && 'geolocation' in navigator) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [step, patient.id]);
 
   if (!isOpen) return null;
 
-  const handleStartEmergency = () => {
+  const handleStartEmergency = async () => {
     playSosBeep();
     setStep('active_live_tracking');
-    db.triggerSOS(patient.id, liveCoords, accuracy);
+    try {
+      await emergencyService.triggerSOS({
+        patientId: patient.id,
+        patientUid: patient.uid,
+        patientName: patient.name
+      });
+    } catch (e) {
+      console.warn('triggerSOS error:', e);
+    }
+    db.triggerSOS(patient.id, liveCoords || { lat: 12.9716, lng: 77.5946 }, accuracy || 5);
     if (onTriggerCaregiverAlert) {
       onTriggerCaregiverAlert(patient.homeLocation, false);
     }
   };
 
-  const handleResolveEmergency = () => {
+  const handleResolveEmergency = async () => {
+    try {
+      await emergencyService.resolveSOS(patient.id, 'Patient');
+    } catch (e) {
+      console.warn('resolveSOS error:', e);
+    }
     db.resolveSOS(patient.id);
     setStep('resolved');
     setTimeout(() => {

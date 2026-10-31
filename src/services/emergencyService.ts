@@ -158,6 +158,47 @@ export const emergencyService = {
   },
 
   /**
+   * Update active SOS alert and patient document with real-time coordinates from watchPosition
+   */
+  async updateSOSLocation(patientId: string, lat: number, lng: number, accuracy: number): Promise<void> {
+    const formattedId = patientId.trim().toUpperCase();
+    const nowIso = new Date().toISOString();
+    const locationStr = `GPS ±${accuracy}m (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+
+    try {
+      await updateDoc(doc(firestore, 'patients', formattedId), {
+        status: 'sos_alert',
+        currentLatitude: lat,
+        currentLongitude: lng,
+        locationAccuracy: accuracy,
+        updatedAt: nowIso
+      });
+
+      const q = query(
+        collection(firestore, 'alerts'),
+        where('patientId', '==', formattedId)
+      );
+      const snap = await onSnapshot(q, (snapshot) => {
+        snapshot.docs.forEach(async (docSnap) => {
+          const dData = docSnap.data();
+          if (dData.status === 'active') {
+            await updateDoc(doc(firestore, 'alerts', docSnap.id), {
+              latitude: lat,
+              longitude: lng,
+              accuracyMeters: accuracy,
+              location: locationStr,
+              timestamp: nowIso
+            });
+          }
+        });
+      });
+      setTimeout(() => snap(), 1500);
+    } catch (e) {
+      console.warn('[EmergencyService] updateSOSLocation error:', e);
+    }
+  },
+
+  /**
    * Resolve active SOS alert in Firestore
    */
   async resolveSOS(patientId: string, resolvedBy: string = 'Caregiver'): Promise<void> {
@@ -169,6 +210,8 @@ export const emergencyService = {
       try {
         await updateDoc(doc(firestore, 'patients', formattedId), {
           status: 'all_good',
+          currentLatitude: null,
+          currentLongitude: null,
           updatedAt: nowIso
         });
       } catch (e) {
