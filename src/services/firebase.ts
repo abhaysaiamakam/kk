@@ -38,7 +38,7 @@ import firebaseConfig from '../../firebase-applet-config.json';
 import { Language, UserRole } from '../types';
 
 // Initialize Firebase App
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+export const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // CRITICAL: Initialize Firestore with specific database ID from config
 export const firestore = getFirestore(app, firebaseConfig.firestoreDatabaseId);
