@@ -88,7 +88,15 @@ export const SOSModal: React.FC<SOSModalProps> = ({
     } catch (e) {
       console.warn('triggerSOS error:', e);
     }
-    db.triggerSOS(patient.id, liveCoords || { lat: 12.9716, lng: 77.5946 }, accuracy || 5);
+    // db.triggerSOS(patient.id, liveCoords || { lat: 12.9716, lng: 77.5946 }, accuracy || 5);
+    // Only trigger if we have coordinates, or handle location unavailability
+    if (liveCoords) {
+      db.triggerSOS(patient.id, liveCoords, accuracy || 5);
+    } else {
+      // Maybe trigger with null coords or wait?
+      // For now, trigger without explicit coords to let triggerSOS handle it
+      db.triggerSOS(patient.id);
+    }
     if (onTriggerCaregiverAlert) {
       onTriggerCaregiverAlert(patient.homeLocation, false);
     }

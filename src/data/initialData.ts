@@ -31,11 +31,7 @@ export const INITIAL_PATIENTS: PatientProfile[] = [
     streakDays: 5,
     overallCompletion: 93,
     caregiverId: 'CG-101',
-    adaptiveNotes: 'Wakes up at 6:45 AM. Enjoys bamboo flute in the morning. Completes routine best before 10 AM.',
-    currentLatitude: 12.9716,
-    currentLongitude: 77.5946,
-    locationAccuracy: 5,
-    locationLastUpdated: '2 min ago'
+    adaptiveNotes: 'Wakes up at 6:45 AM. Enjoys bamboo flute in the morning. Completes routine best before 10 AM.'
   },
   {
     id: 'P-20345',
@@ -51,11 +47,7 @@ export const INITIAL_PATIENTS: PatientProfile[] = [
     streakDays: 3,
     overallCompletion: 81,
     caregiverId: 'CG-101',
-    adaptiveNotes: 'Prefers Tamil or English voice reminders. Often needs a gentle 15-minute afternoon reminder.',
-    currentLatitude: 13.0827,
-    currentLongitude: 80.2707,
-    locationAccuracy: 8,
-    locationLastUpdated: '10 min ago'
+    adaptiveNotes: 'Prefers Tamil or English voice reminders. Often needs a gentle 15-minute afternoon reminder.'
   },
   {
     id: 'P-30721',
@@ -71,11 +63,7 @@ export const INITIAL_PATIENTS: PatientProfile[] = [
     streakDays: 2,
     overallCompletion: 76,
     caregiverId: 'CG-101',
-    adaptiveNotes: 'Blood pressure medication sensitive. Requires close monitoring during sudden weather changes.',
-    currentLatitude: 12.2958,
-    currentLongitude: 76.6394,
-    locationAccuracy: 5,
-    locationLastUpdated: 'Just now'
+    adaptiveNotes: 'Blood pressure medication sensitive. Requires close monitoring during sudden weather changes.'
   }
 ];
 
