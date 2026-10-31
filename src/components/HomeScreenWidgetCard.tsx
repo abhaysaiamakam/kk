@@ -1,31 +1,39 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Calendar, Clock, CheckCircle2, Smartphone, ShieldCheck, RefreshCw } from 'lucide-react';
-import { TaskItem, Language } from '../types';
+import { TaskItem, Language, UserRole } from '../types';
 import { notificationService } from '../services/notificationService';
 import { translations } from '../data/translations';
 
 interface HomeScreenWidgetCardProps {
   tasks: TaskItem[];
   language: Language;
+  userId: string;
+  patientId: string;
+  role: Exclude<UserRole, null>;
 }
 
-export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ tasks, language }) => {
+export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ tasks, language, userId, patientId, role }) => {
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermission | 'unsupported'>(
     notificationService.getPermissionStatus()
   );
   const [showRebootInfo, setShowRebootInfo] = useState(false);
+  const [enableError, setEnableError] = useState('');
   const t = translations[language];
 
   const pendingTasks = tasks.filter(t => t.status === 'pending').slice(0, 3);
 
   const handleEnableNotifications = async () => {
-    const granted = await notificationService.requestPermission();
-    setPermissionStatus(notificationService.getPermissionStatus());
-    if (granted) {
+    setEnableError('');
+    try {
+      await notificationService.enablePushForUser({ uid: userId, patientId, role });
+      setPermissionStatus(notificationService.getPermissionStatus());
       notificationService.showLocalNotification(
         'KeenKeep Notifications Active',
-        'Browser notifications for new tasks and emergency alerts are enabled while KeenKeep is open.'
+        'Phone alerts are enabled for task changes and SOS updates.'
       );
+    } catch (error) {
+      setEnableError(error instanceof Error ? error.message : 'Could not enable phone alerts.');
+      setPermissionStatus(notificationService.getPermissionStatus());
     }
   };
 
@@ -43,7 +51,7 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
               Task Notifications
             </h3>
             <p className="text-xs text-gray-500">
-              Browser task and emergency notifications
+              Phone alerts for task changes and SOS
             </p>
           </div>
         </div>
@@ -113,7 +121,7 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
       <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-500">
         <span className="flex items-center space-x-1">
           <ShieldCheck className="w-3.5 h-3.5 text-[#2D4F3B]" />
-          <span>WorkManager & AlarmManager background sync</span>
+              <span>Phone notification delivery</span>
         </span>
         <button
           onClick={() => setShowRebootInfo(!showRebootInfo)}
@@ -125,12 +133,14 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
 
       {showRebootInfo && (
         <div className="mt-3 p-3 bg-[#A8C9B0]/15 rounded-2xl text-[11px] text-[#2D4F3B] space-y-1 animate-in fade-in">
-          <p className="font-semibold">💡 Background Notification Policy:</p>
-          <p>• Reminders run in the background via WorkManager/AlarmManager even when the app is closed.</p>
-          <p>• Alarms automatically reschedule themselves after a device reboot.</p>
-          <p className="font-medium text-red-700">⚠️ Note: No app or service can send notifications while the phone is fully powered off.</p>
+          <p className="font-semibold">Phone notification delivery</p>
+          <p>• Task and SOS push alerts require notification permission and the configured push service.</p>
+          <p>• iPhone and iPad require KeenKeep to be installed on the Home Screen for web push.</p>
+          <p className="font-medium">The operating system controls lock-screen display, sound, and alert style.</p>
         </div>
       )}
+
+      {enableError && <p role="alert" className="mt-3 text-xs font-medium text-red-700">{enableError}</p>}
 
     </div>
   );
