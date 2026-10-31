@@ -148,9 +148,16 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
             filteredNotifs.map((notif) => (
               <div
                 key={notif.id}
-                className={`p-3.5 rounded-2xl border transition-all flex items-start space-x-3.5 ${
+                onClick={() => {
+                  db.markNotificationRead(notif.id);
+                  setNotifications(db.getNotifications());
+                  if (notif.type === 'sos_alert' || notif.urgency === 'emergency') {
+                    window.open('https://www.google.com/maps/search/?api=1&query=12.9716,77.5946', '_blank');
+                  }
+                }}
+                className={`p-3.5 rounded-2xl border transition-all flex items-start space-x-3.5 cursor-pointer hover:shadow-sm ${
                   notif.urgency === 'emergency'
-                    ? 'bg-red-50/80 border-red-200'
+                    ? 'bg-red-50/80 border-red-200 hover:bg-red-100'
                     : notif.read
                     ? 'bg-white border-gray-100 opacity-80'
                     : 'bg-[#F8F7F0] border-gray-200 shadow-xs'

@@ -67,7 +67,7 @@ export const INITIAL_PATIENTS: PatientProfile[] = [
     liveLocationEnabled: true,
     dateOfBirth: '03 Dec 1951',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    status: 'sos_alert',
+    status: 'all_good',
     streakDays: 2,
     overallCompletion: 76,
     caregiverId: 'CG-101',
@@ -427,7 +427,8 @@ export const INITIAL_ALERTS: EmergencyAlertItem[] = [
     longitude: 76.6394,
     accuracyMeters: 5,
     lastUpdatedText: 'Just now • 5m accuracy',
-    status: 'active',
+    status: 'resolved',
+    resolvedAt: 'Today',
     hasVoiceNote: true,
     notes: 'Triggered SOS button on patient dashboard. Blood pressure alert flagged.',
     historyLogs: [

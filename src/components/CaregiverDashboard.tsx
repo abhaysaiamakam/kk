@@ -479,28 +479,48 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             </div>
           </div>
 
-          {/* Action Buttons: Call Patient & Call Ambulance (108) */}
-          <div className="grid grid-cols-2 gap-3 pt-1">
+          {/* Action Buttons: Google Maps, Resolve, Call Patient & Call Ambulance */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+            <button
+              onClick={() => {
+                const lat = activePatient.currentLatitude || 12.9716;
+                const lng = activePatient.currentLongitude || 77.5946;
+                window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+              }}
+              className="py-3 px-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+            >
+              <Navigation className="w-4 h-4" />
+              <span>Google Maps</span>
+            </button>
+
+            <button
+              onClick={() => handleResolveSosCall(activePatient.id)}
+              className="py-3 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Resolve Emergency</span>
+            </button>
+
             {activePatient.phone && activePatient.phone !== 'Not added yet' ? (
               <a
                 href={`tel:${activePatient.phone}`}
-                className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
+                className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
               >
                 <Phone className="w-4 h-4" />
                 <span>Call Patient</span>
               </a>
             ) : (
-              <div className="py-3 px-3 rounded-2xl bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center space-x-2">
-                <span>Phone number unavailable</span>
+              <div className="py-3 px-3 rounded-2xl bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center space-x-1.5">
+                <span>No Phone</span>
               </div>
             )}
 
             <a
               href="tel:108"
-              className="py-3 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
+              className="py-3 px-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
             >
               <Ambulance className="w-4 h-4" />
-              <span>Call Ambulance (108)</span>
+              <span>Call 108</span>
             </a>
           </div>
         </div>
