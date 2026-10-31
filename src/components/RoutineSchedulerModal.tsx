@@ -144,6 +144,12 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
 
     try {
       const displayTime = formatScheduledTime(dueTime);
+      const dueAtDate = new Date(`${dueDate}T${dueTime}:00`);
+      if (Number.isNaN(dueAtDate.getTime())) {
+        setFeedback({ type: 'error', message: 'Please choose a valid due date and time.' });
+        setIsSaving(false);
+        return;
+      }
       const taskId = `task-${crypto.randomUUID()}`;
       const newTask: TaskItem = {
         id: taskId,
@@ -157,6 +163,8 @@ export const RoutineSchedulerModal: React.FC<RoutineSchedulerModalProps> = ({
         time: displayTime,
         dueDate,
         dueTime: displayTime,
+        dueAt: dueAtDate.toISOString(),
+        reminderStatus: 'pending',
         priority: priority,
         category: category,
         dosage: dosage.trim() || undefined,
