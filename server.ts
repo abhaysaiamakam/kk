@@ -30,6 +30,7 @@ import {
   generateCognitiveHint,
   generateCaregiverSummaryReport
 } from './src/server/aiService.ts';
+import { sortTasksChronologically } from './src/utils/timeUtils.ts';
 
 dotenv.config();
 
@@ -436,7 +437,7 @@ async function handleVoiceCompanionRequest(req: Request, res: Response) {
 
     const { patientId, message, language = 'en' } = req.body;
     const patient = patients.find((p) => p.id === patientId) || patients[0];
-    const patientTasks = tasks.filter((t) => t.patientId === patient.id);
+    const patientTasks = sortTasksChronologically(tasks.filter((t) => t.patientId === patient.id));
     const uncompletedTasks = patientTasks.filter((t) => !t.completed);
     const completedTasks = patientTasks.filter((t) => t.completed);
     const nextTask = uncompletedTasks[0];
@@ -528,18 +529,24 @@ async function handleVoiceCompanionRequest(req: Request, res: Response) {
       msgLower.includes('बात करनी है')
     ) {
       intent = 'loneliness_support';
-      action = 'call_contact';
-      actionPayload = { contactName: 'Meera (Daughter)', phone: '+91 98765 43210' };
-      needsConfirmation = true;
-      if (language === 'kn') {
-        spokenText = `ನಾನು ನಿಮ್ಮೊಂದಿಗೆ ಇಲ್ಲೇ ಇದ್ದೇನೆ, ${firstName}. ನಿಮ್ಮ ಮಗಳು ಮೀರಾ ಅವರಿಗೆ ನಾವು ಕರೆ ಮಾಡಲೇ?`;
-        confirmationPrompt = 'ಮಗಳು ಮೀರಾ ಅವರಿಗೆ ಕರೆ ಮಾಡಬೇಕೆ?';
-      } else if (language === 'hi') {
-        spokenText = `मैं आपके साथ हूँ, ${firstName} जी। क्या आप अपनी बेटी मीरा से बात करना चाहेंगे?`;
-        confirmationPrompt = 'क्या बेटी मीरा को कॉल करना है?';
+      const cName = patient.caregiverName && patient.caregiverName !== 'Not added yet' ? patient.caregiverName : 'Caregiver';
+      const cPhone = patient.caregiverPhone && patient.caregiverPhone !== 'Not added yet' ? patient.caregiverPhone : '';
+      if (cPhone) {
+        action = 'call_contact';
+        actionPayload = { contactName: cName, phone: cPhone };
+        needsConfirmation = true;
+        spokenText = language === 'kn'
+          ? `ನಾನು ನಿಮ್ಮೊಂದಿಗೆ ಇಲ್ಲೇ ಇದ್ದೇನೆ, ${firstName}. ನಿಮ್ಮ ಆರೈಕೆದಾರ ${cName} ಅವರಿಗೆ ನಾವು ಕರೆ ಮಾಡಲೇ?`
+          : language === 'hi'
+          ? `मैं आपके साथ हूँ, ${firstName} जी। क्या आप अपने केयरगिवर ${cName} को कॉल करना चाहेंगे?`
+          : `I am right here by your side, ${firstName}. Would you like to call your caregiver ${cName}?`;
+        confirmationPrompt = language === 'kn' ? `${cName} ಅವರಿಗೆ ಕರೆ ಮಾಡಬೇಕೆ?` : language === 'hi' ? `क्या ${cName} को कॉल करना है?` : `Would you like to call ${cName}?`;
       } else {
-        spokenText = `I am right here by your side, ${firstName}. Would you like to call your daughter Meera to have a sweet chat?`;
-        confirmationPrompt = 'Would you like to call your daughter Meera?';
+        spokenText = language === 'kn'
+          ? `ನಾನು ನಿಮ್ಮೊಂದಿಗೆ ಇಲ್ಲೇ ಇದ್ದೇನೆ, ${firstName}. ಆದರೆ ಆರೈಕೆದಾರರ ಫೋನ್ ಸಂಖ್ಯೆ ಲಭ್ಯವಿಲ್ಲ.`
+          : language === 'hi'
+          ? `मैं आपके साथ हूँ, ${firstName} जी। लेकिन केयरगिवर का फोन नंबर उपलब्ध नहीं है।`
+          : `I am right here by your side, ${firstName}. However, caregiver phone number is unavailable.`;
       }
     }
     // 5. Next task command
@@ -604,45 +611,49 @@ async function handleVoiceCompanionRequest(req: Request, res: Response) {
         spokenText = `You have taken: ${takenNames}. Upcoming medicines: ${pendingNames}.`;
       }
     }
-    // 7. Calling family / daughter / son / caregiver
+    // 7. Calling caregiver / family
     else if (
       msgLower.includes('call') ||
       msgLower.includes('phone') ||
-      msgLower.includes('daughter') ||
       msgLower.includes('caregiver') ||
+      msgLower.includes('priya') ||
       msgLower.includes('ಕರೆ') ||
       msgLower.includes('ಫೋನ್') ||
       msgLower.includes('कॉल') ||
-      msgLower.includes('फोन')
+      msgLower.includes('फोन') ||
+      msgLower.includes('केयरगिवर') ||
+      msgLower.includes('आरेइकेदार')
     ) {
       intent = 'call_contact';
-      let contactName = 'Meera (Daughter)';
-      let phone = '+91 98765 43210';
+      const contactName = patient.caregiverName && patient.caregiverName !== 'Not added yet' ? patient.caregiverName : 'Caregiver';
+      const phone = patient.caregiverPhone && patient.caregiverPhone !== 'Not added yet' ? patient.caregiverPhone : '';
 
-      if (msgLower.includes('caregiver') || msgLower.includes('priya') || msgLower.includes('ಆರೈಕೆದಾರ') || msgLower.includes('केयरगिवर')) {
-        contactName = 'Priya Sharma (Caregiver)';
-        phone = '+91 98450 12345';
-      } else if (msgLower.includes('son') || msgLower.includes('rohit') || msgLower.includes('ಮಗ') || msgLower.includes('बेटा')) {
-        contactName = 'Rohit (Son)';
-        phone = '+91 98765 98765';
-      } else if (msgLower.includes('wife') || msgLower.includes('sita') || msgLower.includes('ಹೆಂಡತಿ') || msgLower.includes('पत्नी')) {
-        contactName = 'Sita (Wife)';
-        phone = '+91 91234 56789';
-      }
-
-      action = 'call_contact';
-      actionPayload = { contactName, phone };
-      needsConfirmation = true;
-
-      if (language === 'kn') {
-        spokenText = `ಖಂಡಿತ. ನಿಮ್ಮ ${contactName} ಗೆ ನಾನು ಕರೆ ಮಾಡಬೇಕೆ?`;
-        confirmationPrompt = `${contactName} ಗೆ ಕರೆ ಮಾಡಬೇಕೆ?`;
-      } else if (language === 'hi') {
-        spokenText = `बिल्कुल। क्या आप अपनी ${contactName} को कॉल करना चाहते हैं?`;
-        confirmationPrompt = `क्या ${contactName} को कॉल करना है?`;
+      if (!phone) {
+        if (language === 'kn') {
+          spokenText = `ಆರೈಕೆದಾರರ ಫೋನ್ ಸಂಖ್ಯೆ ಲಭ್ಯವಿಲ್ಲ.`;
+        } else if (language === 'hi') {
+          spokenText = `केयरगिवर का फोन नंबर उपलब्ध नहीं है।`;
+        } else {
+          spokenText = `Caregiver phone number unavailable.`;
+        }
+        action = 'none';
+        actionPayload = null;
+        needsConfirmation = false;
       } else {
-        spokenText = `Of course. Would you like me to call your ${contactName}?`;
-        confirmationPrompt = `Would you like to call ${contactName}?`;
+        action = 'call_contact';
+        actionPayload = { contactName, phone };
+        needsConfirmation = true;
+
+        if (language === 'kn') {
+          spokenText = `ಖಂಡಿತ. ನಿಮ್ಮ ಆರೈಕೆದಾರ ${contactName} ಅವರಿಗೆ ನಾನು ಕರೆ ಮಾಡಬೇಕೆ?`;
+          confirmationPrompt = `${contactName} ಅವರಿಗೆ ಕರೆ ಮಾಡಬೇಕೆ?`;
+        } else if (language === 'hi') {
+          spokenText = `बिल्कुल। क्या आप अपने केयरगिवर ${contactName} को कॉल करना चाहते हैं?`;
+          confirmationPrompt = `क्या ${contactName} को कॉल करना है?`;
+        } else {
+          spokenText = `Of course. Would you like me to call your caregiver ${contactName}?`;
+          confirmationPrompt = `Would you like to call ${contactName}?`;
+        }
       }
     }
     // 8. Relaxing music

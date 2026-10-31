@@ -230,6 +230,7 @@ export interface PatientProfile {
   caregiverId: string;
   caregiverName?: string;
   caregiverPhone?: string;
+  phone?: string;
   adaptiveNotes?: string;
 }
 

@@ -229,13 +229,19 @@ export const SOSModal: React.FC<SOSModalProps> = ({
 
               {/* Action Buttons: Call Caregiver & Call Ambulance (108) */}
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <a
-                  href={`tel:${patient.caregiverPhone || '+919876543210'}`}
-                  className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
-                >
-                  <Phone className="w-4 h-4" />
-                  <span>Call Caregiver</span>
-                </a>
+                {patient.caregiverPhone && patient.caregiverPhone !== 'Not added yet' ? (
+                  <a
+                    href={`tel:${patient.caregiverPhone}`}
+                    className="py-3 px-3 rounded-2xl bg-[#3B664B] hover:bg-[#2D4F3B] text-white font-bold text-xs flex items-center justify-center space-x-2 shadow-xs cursor-pointer"
+                  >
+                    <Phone className="w-4 h-4" />
+                    <span>Call Caregiver</span>
+                  </a>
+                ) : (
+                  <div className="py-3 px-3 rounded-2xl bg-gray-100 text-gray-500 font-bold text-xs flex items-center justify-center space-x-2">
+                    <span>Phone number unavailable</span>
+                  </div>
+                )}
 
                 <a
                   href="tel:108"

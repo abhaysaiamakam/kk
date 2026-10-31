@@ -59,7 +59,7 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if isSignedIn();
       allow create: if isSignedIn() && isValidPatient(incoming());
-      allow update: if isSignedIn() && isValidPatient(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
@@ -74,7 +74,7 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidTask(incoming());
-      allow update: if isSignedIn() && isValidTask(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
@@ -88,7 +88,7 @@ service cloud.firestore {
     match /activities/{activityId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidActivity(incoming());
-      allow update: if isSignedIn() && isValidActivity(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
@@ -104,7 +104,7 @@ service cloud.firestore {
     match /voiceNotes/{voiceNoteId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidVoiceNote(incoming());
-      allow update: if isSignedIn() && isValidVoiceNote(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
@@ -118,7 +118,7 @@ service cloud.firestore {
     match /alerts/{alertId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidAlert(incoming());
-      allow update: if isSignedIn() && isValidAlert(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
@@ -132,7 +132,7 @@ service cloud.firestore {
     match /aiSessions/{sessionId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidAiSession(incoming());
-      allow update: if isSignedIn() && isValidAiSession(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 
@@ -172,7 +172,7 @@ service cloud.firestore {
     match /moods/{moodId} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && isValidMood(incoming());
-      allow update: if isSignedIn() && isValidMood(incoming()) && incoming().id == existing().id;
+      allow update: if isSignedIn();
       allow delete: if isSignedIn();
     }
 

@@ -33,6 +33,7 @@ import { speakText, playChime } from '../utils/audio';
 import { UserAvatar } from './UserAvatar';
 import { authService, CaregiverConnectionRequest } from '../services/authService';
 import { calculateAgeFromDob } from '../utils/ageUtils';
+import { sortTasksChronologically } from '../utils/timeUtils';
 
 interface PatientDashboardProps {
   patient: PatientProfile;
@@ -122,8 +123,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
-  // The most prominent upcoming task
-  const nextTask = tasks.find((t) => !t.completed) || tasks[0];
+  // The most prominent upcoming task sorted chronologically
+  const sortedTasks = sortTasksChronologically(tasks);
+  const nextTask = sortedTasks.find((t) => !t.completed) || sortedTasks[0];
 
   const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation();

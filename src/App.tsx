@@ -95,6 +95,7 @@ export default function App() {
     id: userProfile.patientId || `P-${userProfile.uid.slice(0, 6).toUpperCase()}`,
     uid: userProfile.uid,
     name: userProfile.fullName || 'Patient',
+    phone: userProfile.phone || '',
     age: calculateAgeFromDob(userProfile.dateOfBirth || userProfile.age),
     gender: 'Not added yet',
     bloodGroup: userProfile.bloodGroup || 'Not added yet',
@@ -659,6 +660,11 @@ export default function App() {
         onClose={() => setShowAddPatientModal(false)}
         onAddPatient={handleAddPatient}
         existingCount={patients.length}
+        caregiverUid={currentUser?.uid}
+        caregiverName={userName}
+        caregiverPhone={userProfile?.phone}
+        caregiverEmail={currentUser?.email || ''}
+        caregiverPhotoURL={currentUser?.photoURL || ''}
       />
 
     </div>

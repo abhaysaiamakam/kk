@@ -141,7 +141,7 @@ export const taskService = {
           payload[key] = value;
         }
       }
-      await updateDoc(doc(firestore, 'tasks', taskId), payload);
+      await setDoc(doc(firestore, 'tasks', taskId), payload, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
       throw error;
@@ -156,7 +156,7 @@ export const taskService = {
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     try {
-      await updateDoc(doc(firestore, 'tasks', taskId), {
+      await setDoc(doc(firestore, 'tasks', taskId), {
         status,
         completed,
         snoozed: status === 'snoozed',
@@ -164,7 +164,7 @@ export const taskService = {
         patientConfirmation: completed,
         updatedAt: serverTimestamp(),
         ...(completed ? { completedAt: new Date().toISOString(), completedTime: nowTime } : {})
-      });
+      }, { merge: true });
     } catch (error) {
       handleFirestoreError(error, OperationType.WRITE, path);
       throw error;

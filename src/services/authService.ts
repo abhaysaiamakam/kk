@@ -642,7 +642,9 @@ export const authService = {
 
           results.push({
             id: userDoc?.patientId || pId,
+            uid: patientMatch.uid,
             name: name,
+            phone: userDoc?.phone || patientMatch.phone || '',
             age: calculatedAge,
             gender: 'Not added yet',
             bloodGroup: userDoc?.bloodGroup || 'Not added yet',

@@ -5,9 +5,10 @@ import { TaskItem, PatientProfile, ActivityLog, MoodRecord } from '../types.js';
 export function getEnvConfig() {
   return {
     geminiApiKey: (process.env.GEMINI_API_KEY || '').trim(),
+    geminiApiKeySecondary: (process.env.GEMINI_API_KEY_SECONDARY || process.env.GEMINI_API_KEY_BACKUP || '').trim(),
     geminiModel: (process.env.GEMINI_MODEL || 'gemini-3.8-flash').trim(),
     openRouterApiKey: (process.env.OPENROUTER_API_KEY || '').trim(),
-    openRouterModel: (process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-haiku').trim()
+    openRouterModel: (process.env.OPENROUTER_MODEL || 'anthropic/claude-3.5-sonnet').trim()
   };
 }
 
@@ -32,7 +33,7 @@ export function checkRateLimit(clientIp: string, limit = 60, windowMs = 60000): 
 }
 
 // Timeout helper with AbortController
-async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 9000): Promise<Response> {
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 15000): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -43,16 +44,12 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 9
   }
 }
 
-// Provider Call: Google Gemini (Primary via Official SDK)
-async function callGemini(systemPrompt: string, userPrompt: string, maxTokens = 300): Promise<string> {
-  const { geminiApiKey, geminiModel } = getEnvConfig();
-  if (!geminiApiKey) {
-    throw new Error('GEMINI_API_KEY is not set');
-  }
-
-  const ai = new GoogleGenAI({ apiKey: geminiApiKey });
+// Provider Call: Google Gemini with specific API key
+async function callGeminiWithKey(apiKey: string, systemPrompt: string, userPrompt: string, maxTokens = 300): Promise<string> {
+  const { geminiModel } = getEnvConfig();
+  const ai = new GoogleGenAI({ apiKey });
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Gemini API request timed out')), 9000)
+    setTimeout(() => reject(new Error('Gemini API request timed out')), 15000)
   );
 
   const apiPromise = ai.models.generateContent({
@@ -98,7 +95,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, maxToken
         temperature: 0.6
       })
     },
-    9000
+    15000
   );
 
   if (!response.ok) {
@@ -112,36 +109,46 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, maxToken
   return text;
 }
 
-// Dual-Provider Unified Caller with Seamless Fallback
+// Dual-Provider Unified Caller with Automatic Primary & Secondary Key Fallback
 export async function generateWithFallback(
   systemPrompt: string,
   userPrompt: string,
   maxTokens = 300
 ): Promise<{ text: string; providerUsed: 'gemini' | 'openrouter' | 'fallback' }> {
-  const { geminiApiKey, openRouterApiKey } = getEnvConfig();
+  const { geminiApiKey, geminiApiKeySecondary, openRouterApiKey } = getEnvConfig();
 
-  // 1. Try Primary: Google Gemini
+  // 1. Try Primary Gemini Key
   if (geminiApiKey) {
     try {
-      const text = await callGemini(systemPrompt, userPrompt, maxTokens);
+      const text = await callGeminiWithKey(geminiApiKey, systemPrompt, userPrompt, maxTokens);
       return { text, providerUsed: 'gemini' };
     } catch (err: any) {
-      console.warn('[AI Service] Gemini primary attempt failed, falling back to OpenRouter:', err?.message || err);
+      console.warn('[AI Service] Primary Gemini key attempt failed, trying secondary Gemini key:', err?.message || err);
     }
   }
 
-  // 2. Try Secondary: OpenRouter
+  // 2. Try Secondary Gemini Key
+  if (geminiApiKeySecondary) {
+    try {
+      const text = await callGeminiWithKey(geminiApiKeySecondary, systemPrompt, userPrompt, maxTokens);
+      return { text, providerUsed: 'gemini' };
+    } catch (err: any) {
+      console.warn('[AI Service] Secondary Gemini key attempt failed, trying OpenRouter fallback:', err?.message || err);
+    }
+  }
+
+  // 3. Try Secondary Fallback: OpenRouter
   if (openRouterApiKey) {
     try {
       const text = await callOpenRouter(systemPrompt, userPrompt, maxTokens);
       return { text, providerUsed: 'openrouter' };
     } catch (err: any) {
-      console.warn('[AI Service] OpenRouter secondary attempt failed:', err?.message || err);
+      console.warn('[AI Service] OpenRouter fallback failed:', err?.message || err);
     }
   }
 
-  // 3. Graceful fallback handled by caller
-  return { text: '', providerUsed: 'fallback' };
+  // 4. If all keys and fallback providers fail, return the required user-facing message
+  return { text: "We're temporarily unavailable. Please try again in a minute.", providerUsed: 'fallback' };
 }
 
 // Provider Status API (Public to applet frontend without disclosing secrets)
