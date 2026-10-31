@@ -474,7 +474,9 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
                 <span className="font-bold text-[#263238] text-[11px]">Live GPS Coordinates</span>
               </div>
               <span className="text-[10px] font-mono text-gray-500">
-                {activePatient.currentLatitude || 12.9716}, {activePatient.currentLongitude || 77.5946}
+                {activePatient.currentLatitude && activePatient.currentLongitude
+                  ? `${activePatient.currentLatitude.toFixed(4)}, ${activePatient.currentLongitude.toFixed(4)}`
+                  : 'Patient location unavailable'}
               </span>
             </div>
           </div>

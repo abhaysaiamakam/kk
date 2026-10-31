@@ -396,43 +396,4 @@ export const INITIAL_MEETINGS: RelativeMeeting[] = [
   }
 ];
 
-export const INITIAL_ALERTS: EmergencyAlertItem[] = [
-  {
-    id: 'alt-1',
-    patientId: 'P-10482',
-    patientName: 'Aarav Sharma',
-    timestamp: '2 min ago',
-    location: 'Bengaluru, Karnataka (Lat 12.9716, Lon 77.5946)',
-    latitude: 12.9716,
-    longitude: 77.5946,
-    accuracyMeters: 5,
-    lastUpdatedText: '2 min ago • 5m accuracy',
-    status: 'resolved',
-    hasVoiceNote: false,
-    notes: 'Test location verification completed.',
-    resolvedAt: 'Today, 10:24 AM',
-    historyLogs: [
-      { time: '10:20 AM', message: 'SOS button pressed on mobile device' },
-      { time: '10:21 AM', message: 'Live GPS location streamed to 2 caregivers' },
-      { time: '10:24 AM', message: 'Caregiver acknowledged and resolved alert' }
-    ]
-  },
-  {
-    id: 'alt-2',
-    patientId: 'P-30721',
-    patientName: 'Ramesh Rao',
-    timestamp: 'Just now',
-    location: 'Mysuru, Karnataka (Lat 12.2958, Lon 76.6394)',
-    latitude: 12.2958,
-    longitude: 76.6394,
-    accuracyMeters: 5,
-    lastUpdatedText: 'Just now • 5m accuracy',
-    status: 'resolved',
-    resolvedAt: 'Today',
-    hasVoiceNote: true,
-    notes: 'Triggered SOS button on patient dashboard. Blood pressure alert flagged.',
-    historyLogs: [
-      { time: 'Just now', message: 'SOS activated. Live GPS location sharing initiated.' }
-    ]
-  }
-];
+export const INITIAL_ALERTS: EmergencyAlertItem[] = [];

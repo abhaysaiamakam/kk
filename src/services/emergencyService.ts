@@ -12,7 +12,7 @@ import { EmergencyAlertItem } from '../types';
 
 export const emergencyService = {
   /**
-   * Real-time listener for emergency / SOS alerts onSnapshot
+   * Real-time listener for emergency / SOS alerts onSnapshot (only active alerts)
    */
   subscribeToEmergencyAlerts(
     patientId: string,
@@ -38,20 +38,25 @@ export const emergencyService = {
         const list: EmergencyAlertItem[] = [];
         snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data();
-          list.push({
-            id: data.id || docSnap.id,
-            patientId: data.patientId || formattedId,
-            patientName: data.patientName || 'Patient',
-            time: data.time || 'Just now',
-            timestamp: data.timestamp || new Date().toISOString(),
-            status: data.status || 'active',
-            location: data.location || 'Home Location',
-            hasVoiceNote: data.hasVoiceNote ?? false,
-            resolvedAt: data.resolvedAt
-          });
+          if (data.status === 'active') {
+            list.push({
+              id: data.id || docSnap.id,
+              patientId: data.patientId || formattedId,
+              patientName: data.patientName || 'Patient',
+              time: data.time || 'Just now',
+              timestamp: data.timestamp || new Date().toISOString(),
+              status: 'active',
+              location: data.location || 'Patient location unavailable',
+              latitude: data.latitude ?? undefined,
+              longitude: data.longitude ?? undefined,
+              accuracyMeters: data.accuracyMeters ?? undefined,
+              hasVoiceNote: data.hasVoiceNote ?? false,
+              resolvedAt: data.resolvedAt
+            });
+          }
         });
 
-        console.log(`[EmergencyService] Received ${list.length} real alert record(s) from Firestore.`);
+        console.log(`[EmergencyService] Received ${list.length} active alert record(s) from Firestore.`);
         onUpdate(list);
       },
       (error) => {
@@ -64,17 +69,42 @@ export const emergencyService = {
   },
 
   /**
-   * Trigger SOS alert in Firestore
+   * Trigger SOS alert in Firestore with real device geolocation
    */
   async triggerSOS(params: {
     patientId: string;
     patientUid?: string;
     patientName: string;
-    location?: string;
   }): Promise<string> {
     const alertId = `sos-${params.patientId.toUpperCase()}-${Date.now()}`;
     const path = `alerts/${alertId}`;
     const nowIso = new Date().toISOString();
+
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let accuracy: number | null = null;
+    let locationStr = 'Patient location unavailable';
+
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        if ('geolocation' in navigator) {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 0
+          });
+        } else {
+          reject(new Error('Geolocation not supported'));
+        }
+      });
+      lat = position.coords.latitude;
+      lng = position.coords.longitude;
+      accuracy = Math.round(position.coords.accuracy);
+      locationStr = `GPS ±${accuracy}m (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+    } catch (e) {
+      console.warn('[EmergencyService] Geolocation unavailable or denied during SOS trigger:', e);
+      locationStr = 'Patient location unavailable';
+    }
 
     const alertDoc: EmergencyAlertItem = {
       id: alertId,
@@ -84,17 +114,23 @@ export const emergencyService = {
       timestamp: nowIso,
       status: 'active',
       hasVoiceNote: false,
-      location: params.location || 'Bengaluru, Karnataka (Live ±5m Accuracy)'
+      location: locationStr,
+      latitude: lat ?? undefined,
+      longitude: lng ?? undefined,
+      accuracyMeters: accuracy ?? undefined
     };
 
     try {
       console.log('[EmergencyService] Triggering real SOS Alert in Firestore:', alertDoc);
       await setDoc(doc(firestore, 'alerts', alertId), alertDoc);
 
-      // Also update patient document status to 'sos_alert'
+      // Update patient document status to 'sos_alert'
       try {
         await updateDoc(doc(firestore, 'patients', params.patientId.toUpperCase()), {
           status: 'sos_alert',
+          currentLatitude: lat ?? null,
+          currentLongitude: lng ?? null,
+          locationAccuracy: accuracy ?? null,
           updatedAt: nowIso
         });
       } catch (e) {
@@ -105,6 +141,8 @@ export const emergencyService = {
         try {
           await updateDoc(doc(firestore, 'users', params.patientUid), {
             status: 'sos_alert',
+            currentLatitude: lat ?? null,
+            currentLongitude: lng ?? null,
             updatedAt: nowIso
           });
         } catch (e) {
@@ -140,19 +178,20 @@ export const emergencyService = {
       // 2. Find and update active alerts in 'alerts' collection
       const q = query(
         collection(firestore, 'alerts'),
-        where('patientId', '==', formattedId),
-        where('status', '==', 'active')
+        where('patientId', '==', formattedId)
       );
       const snap = await onSnapshot(q, (snapshot) => {
         snapshot.docs.forEach(async (docSnap) => {
-          await updateDoc(doc(firestore, 'alerts', docSnap.id), {
-            status: 'resolved',
-            resolvedBy,
-            resolvedAt: nowIso
-          });
+          const dData = docSnap.data();
+          if (dData.status === 'active') {
+            await updateDoc(doc(firestore, 'alerts', docSnap.id), {
+              status: 'resolved',
+              resolvedBy,
+              resolvedAt: nowIso
+            });
+          }
         });
       });
-      // Unsubscribe query listener after resolve
       setTimeout(() => snap(), 2000);
 
       console.log(`[EmergencyService] SOS emergency resolved for patient ${formattedId} by ${resolvedBy}.`);
