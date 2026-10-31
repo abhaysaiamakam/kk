@@ -25,7 +25,7 @@ async function claimEvent(eventId) {
 }
 
 async function sendToPatientDevices(patientId, message, caregiverOnly = false) {
-  if (!patientId) return;
+  if (!patientId) return 0;
   const normalizedId = String(patientId).trim().toUpperCase();
   const snapshot = await db.collection('notificationDevices').where('patientId', '==', normalizedId).get();
   const recipients = snapshot.docs.filter((device) => {
@@ -33,6 +33,12 @@ async function sendToPatientDevices(patientId, message, caregiverOnly = false) {
     return typeof data.token === 'string' && data.token.length > 0 && (!caregiverOnly || data.role === 'caregiver');
   });
 
+  if (recipients.length === 0) {
+    logger.info('No registered KeenKeep devices for push event', { patientId: normalizedId });
+    return 0;
+  }
+
+  let delivered = 0;
   for (let start = 0; start < recipients.length; start += 500) {
     const batch = recipients.slice(start, start + 500);
     const response = await getMessaging().sendEachForMulticast({
@@ -51,9 +57,85 @@ async function sendToPatientDevices(patientId, message, caregiverOnly = false) {
       }
     });
     await Promise.all(stale.map((ref) => ref.delete()));
+    delivered += response.successCount;
     logger.info('KeenKeep push batch sent', { patientId: normalizedId, successCount: response.successCount, failureCount: response.failureCount });
   }
+  return delivered;
 }
+
+
+// Runs independently of the browser, so reminders still fire when KeenKeep is closed.
+exports.sendDueTaskReminders = onSchedule({
+  schedule: 'every 1 minutes',
+  timeZone: 'Asia/Kolkata',
+  region: REGION,
+  memory: '256MiB'
+}, async () => {
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const earliestOnTime = new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+  const dueTasks = await db.collection('tasks')
+    .where('reminderStatus', '==', 'pending')
+    .where('dueAt', '<=', nowIso)
+    .orderBy('dueAt')
+    .limit(100)
+    .get();
+
+  for (const taskDoc of dueTasks.docs) {
+    const task = taskDoc.data();
+    const dueAt = task.dueAt;
+    const taskRef = taskDoc.ref;
+
+    if (typeof dueAt !== 'string' || dueAt < earliestOnTime) {
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(taskRef);
+        if (current.exists && current.data().reminderStatus === 'pending' && current.data().dueAt === dueAt) {
+          tx.update(taskRef, { reminderStatus: 'expired', reminderUpdatedAt: FieldValue.serverTimestamp() });
+        }
+      });
+      continue;
+    }
+
+    const claimed = await db.runTransaction(async (tx) => {
+      const current = await tx.get(taskRef);
+      if (!current.exists) return false;
+      const latest = current.data();
+      if (latest.reminderStatus !== 'pending' || latest.dueAt !== dueAt || latest.completed === true || latest.status === 'completed') return false;
+      tx.update(taskRef, { reminderStatus: 'sending', reminderClaimedAt: FieldValue.serverTimestamp() });
+      return true;
+    });
+    if (!claimed) continue;
+
+    try {
+      const delivered = await sendToPatientDevices(task.patientId, {
+        title: 'Task reminder',
+        body: `${toText(task.title, 'Your care task')} is scheduled now.`,
+        tag: `task-reminder-${taskDoc.id}`
+      });
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(taskRef);
+        if (!current.exists) return;
+        const latest = current.data();
+        // Preserve a new pending reminder if a caregiver rescheduled during delivery.
+        if (latest.reminderStatus === 'sending' && latest.dueAt === dueAt) {
+          tx.update(taskRef, {
+            reminderStatus: delivered > 0 ? 'sent' : 'no_devices',
+            reminderSentAt: FieldValue.serverTimestamp(),
+            reminderUpdatedAt: FieldValue.serverTimestamp()
+          });
+        }
+      });
+    } catch (error) {
+      logger.error('Due task push failed; it will be retried', { taskId: taskDoc.id, error });
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(taskRef);
+        if (current.exists && current.data().reminderStatus === 'sending' && current.data().dueAt === dueAt) {
+          tx.update(taskRef, { reminderStatus: 'pending', reminderUpdatedAt: FieldValue.serverTimestamp() });
+        }
+      });
+    }
+  }
+});
 
 exports.notifyOnTaskChange = onDocumentWritten({ document: 'tasks/{taskId}', region: REGION }, async (event) => {
   const before = event.data?.before.exists ? event.data.before.data() : null;
