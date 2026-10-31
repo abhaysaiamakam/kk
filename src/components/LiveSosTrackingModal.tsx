@@ -35,11 +35,35 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
 }) => {
   const [liveMinutesAgo, setLiveMinutesAgo] = useState(2);
   const [isResolved, setIsResolved] = useState(alert.status === 'resolved');
+  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number }>({
+    lat: alert.latitude || 12.9716,
+    lng: alert.longitude || 77.5946
+  });
 
   useEffect(() => {
     const timer = setInterval(() => {
       setLiveMinutesAgo((m) => m + 1);
     }, 60000);
+
+    if ('geolocation' in navigator) {
+      const watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          setCurrentCoords({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude
+          });
+        },
+        (err) => {
+          console.warn('Live SOS GPS watch warning:', err.message);
+        },
+        { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
+      );
+      return () => {
+        clearInterval(timer);
+        navigator.geolocation.clearWatch(watchId);
+      };
+    }
+
     return () => clearInterval(timer);
   }, []);
 
@@ -93,45 +117,25 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
           </button>
         </div>
 
-        {/* Interactive Map Visualizer matching Screen 5 & Screen 10 */}
+        {/* Google Maps Live SOS Location Integration */}
         <div className="relative h-64 sm:h-72 w-full bg-slate-100 overflow-hidden">
-          
-          {/* Simulated Cartographic Map Roads & Parks */}
-          <svg className="w-full h-full object-cover opacity-85" viewBox="0 0 600 350">
-            {/* Background terrain */}
-            <rect width="600" height="350" fill="#E8F0E8" />
-            
-            {/* Water body */}
-            <path d="M0,80 Q150,120 300,90 T600,100 L600,0 L0,0 Z" fill="#D3E6F5" opacity="0.8" />
-            
-            {/* Main roads */}
-            <path d="M0,180 Q300,160 600,220" stroke="#FFFFFF" strokeWidth="18" fill="none" />
-            <path d="M0,180 Q300,160 600,220" stroke="#CBD5E1" strokeWidth="14" fill="none" />
-            
-            <path d="M220,0 L380,350" stroke="#FFFFFF" strokeWidth="16" fill="none" />
-            <path d="M220,0 L380,350" stroke="#CBD5E1" strokeWidth="12" fill="none" />
-            
-            <path d="M100,350 L450,50" stroke="#FFFFFF" strokeWidth="12" fill="none" />
-            <path d="M100,350 L450,50" stroke="#CBD5E1" strokeWidth="8" fill="none" />
-
-            {/* City blocks & parks */}
-            <rect x="60" y="220" width="120" height="90" rx="8" fill="#CDE7D5" opacity="0.7" />
-            <rect x="420" y="160" width="140" height="120" rx="8" fill="#CDE7D5" opacity="0.7" />
-            <rect x="250" y="240" width="90" height="70" rx="6" fill="#F1EFE6" opacity="0.9" />
-
-            {/* Pulse Radius around Patient Location */}
-            <circle cx="300" cy="180" r="50" fill="#F16F6F" fillOpacity="0.15">
-              <animate attributeName="r" values="30;65;30" dur="2.5s" repeatCount="indefinite" />
-              <animate attributeName="opacity" values="0.4;0.1;0.4" dur="2.5s" repeatCount="indefinite" />
-            </circle>
-            <circle cx="300" cy="180" r="28" fill="#F16F6F" fillOpacity="0.25" />
-
-            {/* Location Pin */}
-            <g transform="translate(300, 180)">
-              <circle cx="0" cy="0" r="14" fill="#E11D48" stroke="#FFFFFF" strokeWidth="3" />
-              <circle cx="0" cy="0" r="6" fill="#FFFFFF" />
-            </g>
-          </svg>
+          {(() => {
+            const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+            const mapSrc = apiKey
+              ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&center=${currentCoords.lat},${currentCoords.lng}&zoom=16`
+              : `https://maps.google.com/maps?q=${currentCoords.lat},${currentCoords.lng}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
+            return (
+              <iframe
+                title="Google Maps Live SOS GPS Location"
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                loading="lazy"
+                allowFullScreen
+                src={mapSrc}
+              />
+            );
+          })()}
 
           {/* Compass / Zoom overlay */}
           <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs p-2 rounded-xl shadow-xs border border-gray-200 text-gray-700">

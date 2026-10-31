@@ -24,7 +24,8 @@ import {
   MessageSquare, 
   HeartHandshake, 
   Play,
-  Sparkles 
+  Sparkles,
+  CheckCircle2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { PatientProfile, TaskItem, Language } from '../types';
@@ -34,7 +35,6 @@ import { UserAvatar } from './UserAvatar';
 import { authService, CaregiverConnectionRequest } from '../services/authService';
 import { calculateAgeFromDob } from '../utils/ageUtils';
 import { sortTasksChronologically } from '../utils/timeUtils';
-import { HomeScreenWidgetCard } from './HomeScreenWidgetCard';
 
 interface PatientDashboardProps {
   patient: PatientProfile;
@@ -124,9 +124,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
     }
   };
 
-  // The most prominent upcoming task sorted chronologically
+  // The most prominent upcoming task sorted chronologically, strictly excluding completed tasks
   const sortedTasks = sortTasksChronologically(tasks);
-  const nextTask = sortedTasks.find((t) => !t.completed) || sortedTasks[0];
+  const nextTask = sortedTasks.find((t) => !t.completed && t.status !== 'completed');
 
   const handleCopyId = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -302,9 +302,6 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
         </div>
       </div>
 
-      {/* Home Screen Widget & Background Alarms Card */}
-      <HomeScreenWidgetCard tasks={tasks} language={language} />
-
       {/* NEXT TASK (Most Prominent Element) matching Section 2 */}
       {nextTask ? (
         <div 
@@ -365,11 +362,11 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
       ) : (
         <div className="bg-white rounded-3xl p-6 shadow-xs border border-gray-200/80 text-center space-y-2">
           <div className="w-12 h-12 rounded-2xl bg-[#A8C9B0]/20 text-[#2D4F3B] flex items-center justify-center mx-auto">
-            <Clock className="w-6 h-6" />
+            <CheckCircle2 className="w-6 h-6 text-[#3B664B]" />
           </div>
-          <h3 className="text-base font-bold text-[#263238]">No reminders added yet.</h3>
+          <h3 className="text-base font-bold text-[#263238]">No tasks remaining.</h3>
           <p className="text-xs text-gray-500 max-w-sm mx-auto">
-            Your daily tasks, medication schedules, and wellness routines will appear here as you or your caregiver add them.
+            All scheduled routines and medications are completed for now!
           </p>
         </div>
       )}

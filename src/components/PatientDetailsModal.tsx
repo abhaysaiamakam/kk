@@ -10,7 +10,8 @@ import {
   Globe, 
   Bell, 
   ShieldCheck,
-  Phone
+  Phone,
+  Smartphone
 } from 'lucide-react';
 import { PatientProfile, Language } from '../types';
 import { translations } from '../data/translations';
@@ -43,6 +44,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [formData, setFormData] = useState<PatientProfile>(patient);
   const [notificationsOn, setNotificationsOn] = useState(true);
+  const [showWidgetGuide, setShowWidgetGuide] = useState(false);
 
   if (!isOpen) return null;
 
@@ -353,6 +355,32 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                     }`}
                   />
                 </button>
+              </div>
+
+              {/* Add Home Screen Widget Option */}
+              <div className="py-2.5 border-b border-gray-100 pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3 text-gray-600">
+                    <Smartphone className="w-4 h-4 text-[#4B7358]" />
+                    <span className="font-medium text-[#263238]">Add Home Screen Widget</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowWidgetGuide(!showWidgetGuide)}
+                    className="px-3 py-1.5 rounded-xl bg-[#A8C9B0]/25 text-[#2D4F3B] hover:bg-[#A8C9B0]/40 text-xs font-bold transition-colors cursor-pointer"
+                  >
+                    {showWidgetGuide ? 'Hide Guide' : 'Add Widget'}
+                  </button>
+                </div>
+                {showWidgetGuide && (
+                  <div className="mt-3 p-3 bg-[#A8C9B0]/15 rounded-2xl text-xs text-[#2D4F3B] space-y-1.5 animate-in fade-in">
+                    <p className="font-bold">📱 Android Home Screen Widget Instructions:</p>
+                    <p>1. Go to your Android Home Screen.</p>
+                    <p>2. Long-press an empty space and tap <strong>Widgets</strong>.</p>
+                    <p>3. Scroll to find <strong>KeenKeep</strong>.</p>
+                    <p>4. Place the <strong>Upcoming Tasks Widget</strong> on your home screen to view tasks in real-time.</p>
+                  </div>
+                )}
               </div>
 
               {/* Account Actions */}
