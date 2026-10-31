@@ -34,6 +34,7 @@ import { UserAvatar } from './UserAvatar';
 import { authService, CaregiverConnectionRequest } from '../services/authService';
 import { calculateAgeFromDob } from '../utils/ageUtils';
 import { sortTasksChronologically } from '../utils/timeUtils';
+import { HomeScreenWidgetCard } from './HomeScreenWidgetCard';
 
 interface PatientDashboardProps {
   patient: PatientProfile;
@@ -300,6 +301,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
           <span className="bg-white/80 px-2.5 py-1 rounded-xl shrink-0 border border-gray-200/60">&ldquo;Play relaxing music&rdquo;</span>
         </div>
       </div>
+
+      {/* Home Screen Widget & Background Alarms Card */}
+      <HomeScreenWidgetCard tasks={tasks} language={language} />
 
       {/* NEXT TASK (Most Prominent Element) matching Section 2 */}
       {nextTask ? (

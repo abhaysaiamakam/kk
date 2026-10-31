@@ -50,6 +50,7 @@ import { taskService } from '../services/taskService';
 import { emergencyService } from '../services/emergencyService';
 import { moodService } from '../services/moodService';
 import { aiSummaryService } from '../services/aiSummaryService';
+import { HomeScreenWidgetCard } from './HomeScreenWidgetCard';
 
 interface CaregiverDashboardProps {
   caregiverName?: string;
@@ -812,6 +813,9 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
 
         {/* Right Column: Smart Routine Suggestions + Multi-Patient Management */}
         <div className="space-y-6">
+          
+          {/* Home Screen Widget Card & Background Notifications */}
+          <HomeScreenWidgetCard tasks={tasksList} language={language} />
           
           {/* FEATURE 9 & SECTION 14: SMART ROUTINE SUGGESTIONS */}
           <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-xs space-y-4">
