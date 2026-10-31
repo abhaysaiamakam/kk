@@ -34,9 +34,9 @@ export const SOSModal: React.FC<SOSModalProps> = ({
   onTriggerCaregiverAlert
 }) => {
   const [step, setStep] = useState<'confirm' | 'active_live_tracking' | 'resolved'>('confirm');
-  const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number }>({ lat: 12.9716, lng: 77.5946 });
-  const [accuracy, setAccuracy] = useState<number>(5);
-  const [locationStatus, setLocationStatus] = useState<string>('Requesting GPS beacon...');
+  const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [locationStatus, setLocationStatus] = useState<string>("Waiting for patient's GPS location");
   const [lastUpdated, setLastUpdated] = useState<string>('Just now');
   const [showHistory, setShowHistory] = useState(false);
 
@@ -53,11 +53,13 @@ export const SOSModal: React.FC<SOSModalProps> = ({
           setLastUpdated('Just now');
         },
         (err) => {
-          console.warn('Geolocation fallback notice:', err.message);
-          setLocationStatus('Using verified home address GPS fallback');
+          console.warn('Geolocation error:', err.message);
+          setLocationStatus('Location unavailable');
         },
-        { enableHighAccuracy: true, timeout: 5000 }
+        { enableHighAccuracy: true, timeout: 8000 }
       );
+    } else {
+      setLocationStatus('Location unavailable');
     }
   }, [isOpen]);
 
@@ -221,7 +223,7 @@ export const SOSModal: React.FC<SOSModalProps> = ({
                     </div>
                   </div>
                   <span className="text-[10px] font-mono text-gray-400">
-                    {liveCoords.lat.toFixed(4)}, {liveCoords.lng.toFixed(4)}
+                    {liveCoords ? `${liveCoords.lat.toFixed(4)}, ${liveCoords.lng.toFixed(4)}` : 'Location unavailable'}
                   </span>
                 </div>
 

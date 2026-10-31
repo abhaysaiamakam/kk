@@ -35,10 +35,9 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
 }) => {
   const [liveMinutesAgo, setLiveMinutesAgo] = useState(2);
   const [isResolved, setIsResolved] = useState(alert.status === 'resolved');
-  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number }>({
-    lat: alert.latitude || 12.9716,
-    lng: alert.longitude || 77.5946
-  });
+  const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(
+    alert.latitude && alert.longitude ? { lat: alert.latitude, lng: alert.longitude } : null
+  );
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -118,24 +117,30 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
         </div>
 
         {/* Google Maps Live SOS Location Integration */}
-        <div className="relative h-64 sm:h-72 w-full bg-slate-100 overflow-hidden">
-          {(() => {
-            const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
-            const mapSrc = apiKey
-              ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&center=${currentCoords.lat},${currentCoords.lng}&zoom=16`
-              : `https://maps.google.com/maps?q=${currentCoords.lat},${currentCoords.lng}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
-            return (
-              <iframe
-                title="Google Maps Live SOS GPS Location"
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                loading="lazy"
-                allowFullScreen
-                src={mapSrc}
-              />
-            );
-          })()}
+        <div className="relative h-64 sm:h-72 w-full bg-slate-100 overflow-hidden flex items-center justify-center">
+          {currentCoords ? (
+            (() => {
+              const apiKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+              const mapSrc = apiKey
+                ? `https://www.google.com/maps/embed/v1/place?key=${apiKey}&center=${currentCoords.lat},${currentCoords.lng}&zoom=16`
+                : `https://maps.google.com/maps?q=${currentCoords.lat},${currentCoords.lng}&t=&z=16&ie=UTF8&iwloc=&output=embed`;
+              return (
+                <iframe
+                  title="Google Maps Live SOS GPS Location"
+                  width="100%"
+                  height="100%"
+                  style={{ border: 0 }}
+                  loading="lazy"
+                  allowFullScreen
+                  src={mapSrc}
+                />
+              );
+            })()
+          ) : (
+            <div className="text-center p-6 text-gray-500 font-bold text-sm">
+              Location unavailable
+            </div>
+          )}
 
           {/* Compass / Zoom overlay */}
           <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-xs p-2 rounded-xl shadow-xs border border-gray-200 text-gray-700">
