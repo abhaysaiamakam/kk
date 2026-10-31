@@ -1,6 +1,7 @@
 import { 
   collection, 
   doc, 
+  getDoc,
   onSnapshot, 
   query, 
   setDoc, 
@@ -9,6 +10,27 @@ import {
 } from 'firebase/firestore';
 import { firestore, handleFirestoreError, OperationType } from './firebase';
 import { TaskItem, TaskStatus } from '../types';
+
+function toDueAt(dateValue?: string, timeValue?: string): string | undefined {
+  if (!dateValue || !timeValue) return undefined;
+  const time = timeValue.trim();
+  const twelveHour = time.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  const twentyFourHour = time.match(/^(\d{1,2}):(\d{2})$/);
+  let hours: number;
+  let minutes: number;
+  if (twelveHour) {
+    hours = Number(twelveHour[1]) % 12 + (twelveHour[3].toUpperCase() === 'PM' ? 12 : 0);
+    minutes = Number(twelveHour[2]);
+  } else if (twentyFourHour) {
+    hours = Number(twentyFourHour[1]);
+    minutes = Number(twentyFourHour[2]);
+  } else {
+    return undefined;
+  }
+  const [year, month, day] = dateValue.split('-').map(Number);
+  const due = new Date(year, month - 1, day, hours, minutes, 0, 0);
+  return Number.isNaN(due.getTime()) ? undefined : due.toISOString();
+}
 
 export const taskService = {
   /**
@@ -42,6 +64,17 @@ export const taskService = {
 
           // Check if matches patientId or patientUid
           if (docPatientId === formattedId || docPatientUid === patientId || docPatientId === patientId.toUpperCase()) {
+            // Backfill legacy scheduled tasks once so they participate in server due reminders.
+            if (!data.dueAt && data.dueDate && (data.dueTime || data.time)) {
+              const legacyDueAt = toDueAt(data.dueDate, data.dueTime || data.time);
+              if (legacyDueAt) {
+                const alreadyDue = Date.parse(legacyDueAt) < Date.now() - 5 * 60 * 1000;
+                updateDoc(doc(firestore, 'tasks', docSnap.id), {
+                  dueAt: legacyDueAt,
+                  reminderStatus: data.completed || data.status === 'completed' ? 'cancelled' : alreadyDue ? 'expired' : 'pending'
+                }).catch((error) => console.warn('[TaskService] Could not backfill scheduled reminder:', error));
+              }
+            }
             list.push({
               id: data.id || docSnap.id,
               patientId: data.patientId || formattedId,
@@ -54,6 +87,8 @@ export const taskService = {
               time: data.time || 'Today',
               dueDate: data.dueDate,
               dueTime: data.dueTime,
+              dueAt: data.dueAt,
+              reminderStatus: data.reminderStatus,
               priority: data.priority || 'medium',
               category: data.category || 'medicine',
               completed: data.completed ?? false,
@@ -101,6 +136,8 @@ export const taskService = {
       patientUid: task.patientUid || '',
       caregiverUid: task.caregiverUid || '',
       status: task.status || 'pending',
+      dueAt: task.dueAt || toDueAt(task.dueDate, task.dueTime || task.time),
+      reminderStatus: task.reminderStatus || 'pending',
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     };
@@ -128,10 +165,21 @@ export const taskService = {
     const path = `tasks/${taskId}`;
 
     try {
+      const currentSnap = await getDoc(doc(firestore, 'tasks', taskId));
+      const current = currentSnap.exists() ? currentSnap.data() : {};
       const rawPayload: any = { 
         ...updates,
         updatedAt: serverTimestamp()
       };
+      const rescheduled = updates.dueAt !== undefined || updates.dueDate !== undefined || updates.dueTime !== undefined || updates.time !== undefined;
+      if (rescheduled) {
+        rawPayload.dueAt = updates.dueAt || toDueAt(
+          updates.dueDate ?? current.dueDate,
+          updates.dueTime ?? updates.time ?? current.dueTime ?? current.time
+        );
+        if (!rawPayload.dueAt) throw new Error('A valid due date and time are required to schedule a task reminder.');
+        rawPayload.reminderStatus = 'pending';
+      }
       if (updates.patientId) {
         rawPayload.patientId = updates.patientId.toUpperCase();
       }
@@ -162,6 +210,7 @@ export const taskService = {
         snoozed: status === 'snoozed',
         patientConfirmed: completed,
         patientConfirmation: completed,
+        reminderStatus: completed || status === 'missed' || status === 'snoozed' ? 'cancelled' : 'pending',
         updatedAt: serverTimestamp(),
         ...(completed ? { completedAt: new Date().toISOString(), completedTime: nowTime } : {})
       }, { merge: true });

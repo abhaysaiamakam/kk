@@ -28,6 +28,17 @@ service cloud.firestore {
       return resource.data;
     }
 
+    function isValidNotificationDevice(data) {
+      return data.onesignalExternalId == request.auth.uid &&
+        data.patientId is string && data.patientId.size() > 0 && data.patientId.size() <= 128 &&
+        data.role in ['patient', 'caregiver'] &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == data.role &&
+        ((data.role == 'patient' &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.patientId == data.patientId) ||
+         (data.role == 'caregiver' &&
+          data.patientId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.connectedPatientIds));
+    }
+
     // Connectivity test collection
     match /test/{docId} {
       allow read: if true;
@@ -48,18 +59,12 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
-    // A signed-in user can manage only their own browser/device push tokens.
+    // A signed-in user can manage only their own OneSignal external ID/device.
     match /notificationDevices/{deviceId} {
       allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
-      allow create, update: if isOwner(incoming().uid) &&
-        incoming().token is string && incoming().token.size() > 0 && incoming().token.size() <= 4096 &&
-        incoming().patientId is string && incoming().patientId.size() > 0 && incoming().patientId.size() <= 128 &&
-        incoming().role in ['patient', 'caregiver'] &&
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == incoming().role &&
-        ((incoming().role == 'patient' &&
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.patientId == incoming().patientId) ||
-         (incoming().role == 'caregiver' &&
-          incoming().patientId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.connectedPatientIds));
+      allow create: if isOwner(incoming().uid) && isValidNotificationDevice(incoming());
+      allow update: if isSignedIn() && existing().uid == request.auth.uid &&
+        isOwner(incoming().uid) && isValidNotificationDevice(incoming());
       allow delete: if isSignedIn() && existing().uid == request.auth.uid;
     }
 

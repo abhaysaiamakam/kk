@@ -25,6 +25,9 @@ export interface TaskItem {
   time: string;
   dueDate?: string;
   dueTime?: string;
+  /** ISO-8601 instant derived from the user's local due date and time. */
+  dueAt?: string;
+  reminderStatus?: 'pending' | 'sending' | 'sent' | 'no_devices' | 'cancelled' | 'expired';
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   category: 'medicine' | 'exercise' | 'calm' | 'meal' | 'activity';
   completed: boolean;

@@ -46,6 +46,15 @@
   //     ]
   //   },
   // ]
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "reminderStatus", "mode": "ASCENDING" },
+        { "fieldPath": "dueAt", "mode": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
