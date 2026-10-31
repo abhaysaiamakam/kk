@@ -182,6 +182,8 @@ export interface AppNotification {
   timestamp: string;
   timeAgo?: string;
   read: boolean;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface ContactItem {
@@ -291,6 +293,7 @@ export interface EmergencyAlertItem {
   lastUpdatedText?: string;
   coords?: { lat: number; lng: number };
   accuracyMeters?: number;
+  locationLastUpdated?: string;
   status: 'active' | 'resolved' | 'escalated';
   hasVoiceNote: boolean;
   notes?: string;

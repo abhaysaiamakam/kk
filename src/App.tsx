@@ -46,6 +46,7 @@ import { authService } from './services/authService';
 import { patientService } from './services/patientService';
 import { taskService } from './services/taskService';
 import { emergencyService } from './services/emergencyService';
+import { notificationService } from './services/notificationService';
 import { calculateAgeFromDob } from './utils/ageUtils';
 
 export default function App() {
@@ -208,6 +209,11 @@ export default function App() {
     return () => unsubscribe();
   }, [activePatient?.id, activePatient?.uid]);
 
+  useEffect(() => {
+    if (!currentUser || !activePatient.id) return;
+    return notificationService.subscribeToRealtimeEvents(activePatient.id);
+  }, [currentUser?.uid, activePatient.id]);
+
   // Unread Emergency / High Priority Alerts Count
   const unreadAlertCount = patients.filter((p) => p.status === 'sos_alert').length;
 
@@ -269,21 +275,6 @@ export default function App() {
 
   const handleDeleteTask = (taskId: string) => {
     db.deleteTask(taskId);
-  };
-
-  const handleTriggerCaregiverAlert = async (location: string, voiceNote: boolean) => {
-    db.triggerSOS(activePatient.id);
-    await emergencyService.triggerSOS({
-      patientId: activePatient.id,
-      patientUid: userProfile?.uid,
-      patientName: activePatient.name,
-      location
-    });
-  };
-
-  const handleResolveSos = async (patientId: string) => {
-    db.resolveSOS(patientId);
-    await emergencyService.resolveSOS(patientId, userName || 'Caregiver');
   };
 
   const handleUpdatePatient = (updated: PatientProfile) => {
@@ -454,7 +445,6 @@ export default function App() {
               onOpenNotifications={() => setShowNotificationCenterModal(true)}
               onOpenVoiceNotes={() => setShowVoiceNotesModal(true)}
               onAddPatient={() => setShowAddPatientModal(true)}
-              onResolveSos={handleResolveSos}
               onViewSosModal={() => setShowSOSModal(true)}
             />
           </main>
@@ -507,6 +497,7 @@ export default function App() {
         isOpen={showNotificationCenterModal}
         onClose={() => setShowNotificationCenterModal(false)}
         userRole={userRole}
+        patientId={activePatient.id}
       />
 
       {/* Voice Reminder & Push Notification Dialog (Screen 5) */}
@@ -565,7 +556,6 @@ export default function App() {
         onClose={() => setShowSOSModal(false)}
         patient={activePatient}
         language={language}
-        onTriggerCaregiverAlert={handleTriggerCaregiverAlert}
       />
 
       {/* Calm & Breathing Exercise */}

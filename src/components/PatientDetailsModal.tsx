@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Copy, 
@@ -18,6 +18,10 @@ import { translations } from '../data/translations';
 import { UserAvatar } from './UserAvatar';
 import { ImageUploader } from './ImageUploader';
 import { calculateAgeFromDob } from '../utils/ageUtils';
+import { notificationService } from '../services/notificationService';
+import { locationService } from '../services/locationService';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { firestore } from '../services/firebase';
 
 interface PatientDetailsModalProps {
   patient: PatientProfile;
@@ -43,12 +47,32 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
   const [formData, setFormData] = useState<PatientProfile>(patient);
-  const [notificationsOn, setNotificationsOn] = useState(true);
+  const [notificationPermission, setNotificationPermission] = useState(notificationService.getPermissionStatus());
   const [showWidgetGuide, setShowWidgetGuide] = useState(false);
+  const [locationError, setLocationError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) setNotificationPermission(notificationService.getPermissionStatus());
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !patient.id) return;
+    return onSnapshot(doc(firestore, 'patients', patient.id.trim().toUpperCase()), (snapshot) => {
+      if (snapshot.exists()) {
+        setFormData((current) => ({ ...current, liveLocationEnabled: snapshot.data().liveLocationEnabled === true }));
+      }
+    }, (error) => console.error('Could not sync patient location sharing:', error));
+  }, [isOpen, patient.id]);
 
   if (!isOpen) return null;
 
   const t = translations[language];
+
+  const enableNotifications = async () => {
+    const granted = await notificationService.requestPermission();
+    setNotificationPermission(notificationService.getPermissionStatus());
+    if (granted) notificationService.showLocalNotification('KeenKeep notifications enabled', 'Task and SOS notifications are enabled while the app is open.');
+  };
 
   const handleCopyId = () => {
     navigator.clipboard.writeText(patient.id);
@@ -61,10 +85,35 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
     setIsEditing(false);
   };
 
-  const toggleLiveLocation = () => {
-    const updated = { ...formData, liveLocationEnabled: !formData.liveLocationEnabled };
-    setFormData(updated);
-    onUpdatePatient(updated);
+  const toggleLiveLocation = async () => {
+    setLocationError('');
+    const enabled = !formData.liveLocationEnabled;
+    if (!enabled) {
+      try {
+        await locationService.setLocationSharingEnabled(patient.id, false);
+        setFormData((current) => ({ ...current, liveLocationEnabled: false }));
+      } catch {
+        setLocationError('Could not update location sharing. Check your connection and try again.');
+      }
+      return;
+    }
+    if (!window.isSecureContext || !('geolocation' in navigator)) {
+      setLocationError('Location requires a supported browser on HTTPS.');
+      return;
+    }
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+      });
+      await locationService.updateLiveLocation(patient.id, position.coords.latitude, position.coords.longitude);
+      await locationService.setLocationSharingEnabled(patient.id, true);
+      setFormData((current) => ({ ...current, liveLocationEnabled: true }));
+    } catch (err) {
+      const geoError = err as GeolocationPositionError;
+      setLocationError(geoError.code === 1
+        ? 'Allow location access in your browser settings, then try again.'
+        : 'Could not get your current location. Check GPS and try again.');
+    }
   };
 
   return (
@@ -240,6 +289,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                   />
                 </button>
               </div>
+              {locationError && <p role="alert" className="text-xs text-red-700">{locationError}</p>}
 
               {/* Date of Birth & Exact Age */}
               <div className="py-2.5 flex items-center justify-between">
@@ -342,19 +392,16 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                   <Bell className="w-4 h-4 text-[#4B7358]" />
                   <span>{t.notifications}</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setNotificationsOn(!notificationsOn)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
-                    notificationsOn ? 'bg-[#3B664B]' : 'bg-gray-300'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notificationsOn ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-gray-500">
+                    {notificationPermission === 'granted' ? 'Enabled' : notificationPermission === 'denied' ? 'Blocked in browser settings' : notificationPermission === 'unsupported' ? 'Unsupported' : 'Permission needed'}
+                  </span>
+                  {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && notificationPermission !== 'denied' && (
+                    <button type="button" onClick={enableNotifications} className="px-3 py-1.5 rounded-xl bg-[#3B664B] text-white text-xs font-bold">
+                      Enable
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Add Home Screen Widget Option */}

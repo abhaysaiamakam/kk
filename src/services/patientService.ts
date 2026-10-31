@@ -37,6 +37,8 @@ export const patientService = {
 
     // Listen to caregiver user doc to get connectedPatientIds in real time
     const caregiverRef = doc(firestore, 'users', caregiverUid);
+    let patientUnsubscribes: (() => void)[] = [];
+    let currentIds = '';
     const unsubscribeCaregiver = onSnapshot(
       caregiverRef,
       async (docSnap) => {
@@ -45,15 +47,44 @@ export const patientService = {
           const connectedIds: string[] = cData.connectedPatientIds || [];
           console.log(`[PatientService] Caregiver connectedPatientIds updated:`, connectedIds);
 
+          const idsKey = [...connectedIds].sort().join('|');
+          if (idsKey === currentIds) return;
+          currentIds = idsKey;
+          patientUnsubscribes.forEach((unsubscribe) => unsubscribe());
+          patientUnsubscribes = [];
+
           if (connectedIds.length === 0) {
             onUpdate([]);
             return;
           }
 
-          // Fetch patient documents
+          // Load profile fields once, then keep each patient index document live so
+          // GPS coordinates and SOS status update immediately for caregivers.
           try {
-            const patientsList = await authService.getPatientsForCaregiver(caregiverUid, connectedIds);
-            onUpdate(patientsList);
+            const profiles = await authService.getPatientsForCaregiver(caregiverUid, connectedIds);
+            if (idsKey !== currentIds) return;
+            const byId = new Map(profiles.map((profile) => [profile.id.toUpperCase(), profile]));
+            const latest = new Map(byId);
+            onUpdate(Array.from(latest.values()));
+
+            patientUnsubscribes = connectedIds.map((patientId) => {
+              const formattedId = patientId.trim().toUpperCase();
+              return onSnapshot(doc(firestore, 'patients', formattedId), (patientSnap) => {
+                const base = latest.get(formattedId);
+                if (!base || !patientSnap.exists()) return;
+                const data = patientSnap.data();
+                latest.set(formattedId, {
+                  ...base,
+                  liveLocationEnabled: data.liveLocationEnabled === true,
+                  currentLatitude: typeof data.currentLatitude === 'number' ? data.currentLatitude : undefined,
+                  currentLongitude: typeof data.currentLongitude === 'number' ? data.currentLongitude : undefined,
+                  locationAccuracy: typeof data.locationAccuracy === 'number' ? data.locationAccuracy : undefined,
+                  locationLastUpdated: data.locationLastUpdated,
+                  status: data.status || base.status
+                });
+                onUpdate(Array.from(latest.values()));
+              }, (error) => onError?.(error));
+            });
           } catch (err) {
             console.warn('[PatientService] Error fetching connected patient details:', err);
           }
@@ -67,7 +98,10 @@ export const patientService = {
       }
     );
 
-    return unsubscribeCaregiver;
+    return () => {
+      unsubscribeCaregiver();
+      patientUnsubscribes.forEach((unsubscribe) => unsubscribe());
+    };
   },
 
   /**
@@ -131,7 +165,11 @@ export const patientService = {
             gender: 'Not added yet',
             bloodGroup: bloodVal,
             homeLocation: 'Not added yet',
-            liveLocationEnabled: false,
+            liveLocationEnabled: pData.liveLocationEnabled === true,
+            currentLatitude: typeof pData.currentLatitude === 'number' ? pData.currentLatitude : undefined,
+            currentLongitude: typeof pData.currentLongitude === 'number' ? pData.currentLongitude : undefined,
+            locationAccuracy: typeof pData.locationAccuracy === 'number' ? pData.locationAccuracy : undefined,
+            locationLastUpdated: pData.locationLastUpdated,
             dateOfBirth: dobStr || 'Not added yet',
             avatar: avatarVal,
             status: currentStatus as any,

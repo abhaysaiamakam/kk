@@ -28,11 +28,12 @@ export const locationService = {
       await updateDoc(patientRef, {
         currentLatitude: lat,
         currentLongitude: lng,
-        locationLastUpdated: new Date().toLocaleTimeString(),
+        locationLastUpdated: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
     } catch (error) {
       console.error('[LocationService] Error updating live location:', error);
+      throw error;
     }
   }
 };

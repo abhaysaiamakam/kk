@@ -5,7 +5,8 @@ import {
   query, 
   where, 
   setDoc, 
-  updateDoc 
+  updateDoc,
+  getDocs
 } from 'firebase/firestore';
 import { firestore, handleFirestoreError, OperationType } from './firebase';
 import { EmergencyAlertItem } from '../types';
@@ -17,7 +18,8 @@ export const emergencyService = {
   subscribeToEmergencyAlerts(
     patientId: string,
     onUpdate: (alerts: EmergencyAlertItem[]) => void,
-    onError?: (err: any) => void
+    onError?: (err: any) => void,
+    includeResolved = false
   ): () => void {
     if (!patientId) {
       onUpdate([]);
@@ -38,18 +40,19 @@ export const emergencyService = {
         const list: EmergencyAlertItem[] = [];
         snapshot.docs.forEach((docSnap) => {
           const data = docSnap.data();
-          if (data.status === 'active') {
+          if (includeResolved || data.status === 'active') {
             list.push({
               id: data.id || docSnap.id,
               patientId: data.patientId || formattedId,
               patientName: data.patientName || 'Patient',
-              time: data.time || 'Just now',
+              time: data.time || '',
               timestamp: data.timestamp || new Date().toISOString(),
-              status: 'active',
+              status: data.status === 'resolved' || data.status === 'escalated' ? data.status : 'active',
               location: data.location || 'Patient location unavailable',
               latitude: data.latitude ?? undefined,
               longitude: data.longitude ?? undefined,
               accuracyMeters: data.accuracyMeters ?? undefined,
+              locationLastUpdated: data.locationLastUpdated,
               hasVoiceNote: data.hasVoiceNote ?? false,
               resolvedAt: data.resolvedAt
             });
@@ -75,6 +78,7 @@ export const emergencyService = {
     patientId: string;
     patientUid?: string;
     patientName: string;
+    location?: { latitude: number; longitude: number; accuracy: number };
   }): Promise<string> {
     const alertId = `sos-${params.patientId.toUpperCase()}-${Date.now()}`;
     const path = `alerts/${alertId}`;
@@ -86,21 +90,28 @@ export const emergencyService = {
     let locationStr = 'Patient location unavailable';
 
     try {
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        if ('geolocation' in navigator) {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 8000,
-            maximumAge: 0
-          });
-        } else {
-          reject(new Error('Geolocation not supported'));
-        }
-      });
-      lat = position.coords.latitude;
-      lng = position.coords.longitude;
-      accuracy = Math.round(position.coords.accuracy);
-      locationStr = `GPS ±${accuracy}m (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      if (params.location) {
+        lat = params.location.latitude;
+        lng = params.location.longitude;
+        accuracy = params.location.accuracy;
+        locationStr = `GPS ±${accuracy}m (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      } else {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          if ('geolocation' in navigator) {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              enableHighAccuracy: true,
+              timeout: 15000,
+              maximumAge: 0
+            });
+          } else {
+            reject(new Error('Geolocation not supported'));
+          }
+        });
+        lat = position.coords.latitude;
+        lng = position.coords.longitude;
+        accuracy = Math.round(position.coords.accuracy);
+        locationStr = `GPS ±${accuracy}m (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+      }
     } catch (e) {
       console.warn('[EmergencyService] Geolocation unavailable or denied during SOS trigger:', e);
       locationStr = 'Patient location unavailable';
@@ -110,14 +121,17 @@ export const emergencyService = {
       id: alertId,
       patientId: params.patientId.toUpperCase(),
       patientName: params.patientName,
-      time: 'Just now',
+      time: new Date(nowIso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: nowIso,
       status: 'active',
       hasVoiceNote: false,
       location: locationStr,
-      latitude: lat ?? undefined,
-      longitude: lng ?? undefined,
-      accuracyMeters: accuracy ?? undefined
+      ...(lat != null && lng != null ? {
+        latitude: lat,
+        longitude: lng,
+        locationLastUpdated: nowIso
+      } : {}),
+      ...(accuracy != null ? { accuracyMeters: accuracy } : {})
     };
 
     try {
@@ -166,33 +180,33 @@ export const emergencyService = {
     const locationStr = `GPS ±${accuracy}m (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
 
     try {
-      await updateDoc(doc(firestore, 'patients', formattedId), {
-        status: 'sos_alert',
-        currentLatitude: lat,
-        currentLongitude: lng,
-        locationAccuracy: accuracy,
-        updatedAt: nowIso
-      });
+      try {
+        await updateDoc(doc(firestore, 'patients', formattedId), {
+          status: 'sos_alert',
+          currentLatitude: lat,
+          currentLongitude: lng,
+          locationAccuracy: accuracy,
+          locationLastUpdated: nowIso,
+          updatedAt: nowIso
+        });
+      } catch (error) {
+        console.warn('[EmergencyService] Patient location index update failed:', error);
+      }
 
       const q = query(
         collection(firestore, 'alerts'),
         where('patientId', '==', formattedId)
       );
-      const snap = await onSnapshot(q, (snapshot) => {
-        snapshot.docs.forEach(async (docSnap) => {
-          const dData = docSnap.data();
-          if (dData.status === 'active') {
-            await updateDoc(doc(firestore, 'alerts', docSnap.id), {
-              latitude: lat,
-              longitude: lng,
-              accuracyMeters: accuracy,
-              location: locationStr,
-              timestamp: nowIso
-            });
-          }
-        });
-      });
-      setTimeout(() => snap(), 1500);
+      const snapshot = await getDocs(q);
+      await Promise.all(snapshot.docs
+        .filter((alertDoc) => alertDoc.data().status === 'active')
+        .map((alertDoc) => updateDoc(doc(firestore, 'alerts', alertDoc.id), {
+          latitude: lat,
+          longitude: lng,
+          accuracyMeters: accuracy,
+          location: locationStr,
+          locationLastUpdated: nowIso
+        })));
     } catch (e) {
       console.warn('[EmergencyService] updateSOSLocation error:', e);
     }
@@ -210,8 +224,10 @@ export const emergencyService = {
       try {
         await updateDoc(doc(firestore, 'patients', formattedId), {
           status: 'all_good',
+          liveLocationEnabled: false,
           currentLatitude: null,
           currentLongitude: null,
+          locationAccuracy: null,
           updatedAt: nowIso
         });
       } catch (e) {
@@ -223,23 +239,19 @@ export const emergencyService = {
         collection(firestore, 'alerts'),
         where('patientId', '==', formattedId)
       );
-      const snap = await onSnapshot(q, (snapshot) => {
-        snapshot.docs.forEach(async (docSnap) => {
-          const dData = docSnap.data();
-          if (dData.status === 'active') {
-            await updateDoc(doc(firestore, 'alerts', docSnap.id), {
-              status: 'resolved',
-              resolvedBy,
-              resolvedAt: nowIso
-            });
-          }
-        });
-      });
-      setTimeout(() => snap(), 2000);
+      const snapshot = await getDocs(q);
+      await Promise.all(snapshot.docs
+        .filter((alertDoc) => alertDoc.data().status === 'active')
+        .map((alertDoc) => updateDoc(doc(firestore, 'alerts', alertDoc.id), {
+          status: 'resolved',
+          resolvedBy,
+          resolvedAt: nowIso
+        })));
 
       console.log(`[EmergencyService] SOS emergency resolved for patient ${formattedId} by ${resolvedBy}.`);
     } catch (error) {
       console.warn('resolveSOS error:', error);
+      throw error;
     }
   }
 };

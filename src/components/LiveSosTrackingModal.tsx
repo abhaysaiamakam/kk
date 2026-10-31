@@ -35,33 +35,31 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
   onResolveAlert,
   onCallPatient
 }) => {
-  const [liveMinutesAgo, setLiveMinutesAgo] = useState(2);
+  const [locationLastUpdated, setLocationLastUpdated] = useState(alert.locationLastUpdated || alert.timestamp);
   const [isResolved, setIsResolved] = useState(alert.status === 'resolved');
+  const [resolvedBy, setResolvedBy] = useState('');
   const [currentCoords, setCurrentCoords] = useState<{ lat: number; lng: number } | null>(
-    alert.latitude && alert.longitude ? { lat: alert.latitude, lng: alert.longitude } : null
+    alert.latitude != null && alert.longitude != null ? { lat: alert.latitude, lng: alert.longitude } : null
   );
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setLiveMinutesAgo((m) => m + 1);
-    }, 60000);
-
     // Subscribe to real-time updates for THIS specific alert document
     const alertRef = doc(firestore, 'alerts', alert.id);
     const unsubscribe = onSnapshot(alertRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data.latitude && data.longitude) {
+        if (typeof data.latitude === 'number' && typeof data.longitude === 'number') {
           setCurrentCoords({ lat: data.latitude, lng: data.longitude });
         }
+        if (data.locationLastUpdated) setLocationLastUpdated(data.locationLastUpdated);
         if (data.status === 'resolved') {
           setIsResolved(true);
+          setResolvedBy(data.resolvedBy || '');
         }
       }
     });
 
     return () => {
-      clearInterval(timer);
       unsubscribe();
     };
   }, [alert.id]);
@@ -76,9 +74,9 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
   };
 
   const openNavigation = () => {
-    const lat = alert.latitude || 12.9716;
-    const lng = alert.longitude || 77.5946;
-    window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`, '_blank');
+    if (currentCoords) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${currentCoords.lat},${currentCoords.lng}`, '_blank');
+    }
   };
 
   return (
@@ -103,7 +101,7 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
                   {isResolved ? 'Emergency Resolved' : 'SOS Alert Active'}
                 </h2>
                 <p className="text-[11px] text-red-800">
-                  {patient.name} • {liveMinutesAgo} min ago • Live location shared with 2 caregivers
+                  {patient.name} • {new Date(alert.timestamp).toLocaleString()} • Connected caregivers notified
                 </p>
               </div>
             </div>
@@ -158,12 +156,12 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
                   {alert.location}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  Last updated {liveMinutesAgo} min ago • {alert.accuracyMeters || 5}m accuracy
+                  {locationLastUpdated ? `Last updated ${new Date(locationLastUpdated).toLocaleTimeString()}` : 'Location update time unavailable'}{alert.accuracyMeters ? ` • ${alert.accuracyMeters}m accuracy` : ''}
                 </p>
               </div>
             </div>
             <span className="text-[10px] font-bold text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-              Live GPS Beacon
+              {currentCoords ? 'GPS coordinates' : 'Location unavailable'}
             </span>
           </div>
 
@@ -183,8 +181,9 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
             </button>
 
             {/* Navigate */}
-            <button
+              <button
               onClick={openNavigation}
+              disabled={!currentCoords}
               className="py-3 px-3 rounded-2xl bg-[#D8EAF5] hover:bg-[#BEE0F5] text-[#1E4D6B] text-xs font-bold shadow-xs flex items-center justify-center space-x-1.5 transition-colors cursor-pointer"
             >
               <Navigation className="w-4 h-4" />
@@ -210,13 +209,9 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
             </div>
             <div className="space-y-1 text-gray-600 text-[11px]">
               <div className="flex items-center justify-between">
-                <span>26 May 2025 • 10:24 AM</span>
-                <span className="text-green-700 font-semibold">SOS Alert — Resolved</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Today • Just now</span>
+                <span>{new Date(alert.timestamp).toLocaleString()}</span>
                 <span className={isResolved ? 'text-green-700 font-semibold' : 'text-red-600 font-semibold animate-pulse'}>
-                  {isResolved ? 'Resolved by Priya Sharma' : 'Live Broadcast Active'}
+                  {isResolved ? `Resolved${resolvedBy ? ` by ${resolvedBy}` : ''}` : 'SOS alert active'}
                 </span>
               </div>
             </div>

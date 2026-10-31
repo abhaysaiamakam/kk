@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   AlertTriangle, 
-  MapPin, 
   PhoneCall, 
   X, 
   ShieldAlert, 
@@ -15,7 +14,6 @@ import {
 } from 'lucide-react';
 import { PatientProfile, Language, EmergencyAlertItem } from '../types';
 import { translations } from '../data/translations';
-import { db } from '../services/db';
 import { emergencyService } from '../services/emergencyService';
 import { playSosBeep } from '../utils/audio';
 
@@ -24,7 +22,6 @@ interface SOSModalProps {
   onClose: () => void;
   patient: PatientProfile;
   language: Language;
-  onTriggerCaregiverAlert?: (location: string, voiceNote: boolean) => void;
 }
 
 export const SOSModal: React.FC<SOSModalProps> = ({
@@ -32,14 +29,16 @@ export const SOSModal: React.FC<SOSModalProps> = ({
   onClose,
   patient,
   language,
-  onTriggerCaregiverAlert
 }) => {
   const [step, setStep] = useState<'confirm' | 'active_live_tracking' | 'resolved'>('confirm');
   const [liveCoords, setLiveCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [accuracy, setAccuracy] = useState<number | null>(null);
   const [locationStatus, setLocationStatus] = useState<string>("Waiting for patient's GPS location");
-  const [lastUpdated, setLastUpdated] = useState<string>('Just now');
+  const [lastUpdated, setLastUpdated] = useState<string>('Waiting for GPS');
   const [showHistory, setShowHistory] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [emergencyHistory, setEmergencyHistory] = useState<EmergencyAlertItem[]>([]);
+  const lastLocationWriteRef = useRef(0);
 
   const t = translations[language];
 
@@ -55,10 +54,13 @@ export const SOSModal: React.FC<SOSModalProps> = ({
           setLiveCoords({ lat, lng });
           setAccuracy(acc);
           setLocationStatus('GPS active • Tracking movement');
-          setLastUpdated('Just now');
+          setLastUpdated(new Date().toLocaleTimeString());
 
           // Real-time Firestore update
-          emergencyService.updateSOSLocation(patient.id, lat, lng, acc);
+          if (Date.now() - lastLocationWriteRef.current >= 5000) {
+            lastLocationWriteRef.current = Date.now();
+            emergencyService.updateSOSLocation(patient.id, lat, lng, acc);
+          }
         },
         (err) => {
           console.warn('watchPosition error:', err.message);
@@ -74,49 +76,71 @@ export const SOSModal: React.FC<SOSModalProps> = ({
     };
   }, [step, patient.id]);
 
+  useEffect(() => emergencyService.subscribeToEmergencyAlerts(
+    patient.id,
+    setEmergencyHistory,
+    (err) => console.error('Could not load SOS history:', err),
+    true
+  ), [patient.id]);
+
   if (!isOpen) return null;
 
   const handleStartEmergency = async () => {
     playSosBeep();
-    setStep('active_live_tracking');
+    setActionError('');
+    let location: { latitude: number; longitude: number; accuracy: number } | undefined;
+    if (window.isSecureContext && 'geolocation' in navigator) {
+      try {
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0
+          });
+        });
+        location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: Math.round(position.coords.accuracy)
+        };
+        setLiveCoords({ lat: location.latitude, lng: location.longitude });
+        setAccuracy(location.accuracy);
+        setLocationStatus('GPS active • Tracking movement');
+      } catch (error) {
+        const geoError = error as GeolocationPositionError;
+        setLocationStatus(geoError.code === 1 ? 'Location permission denied' : 'Location unavailable');
+      }
+    } else {
+      setLocationStatus('Location requires HTTPS and browser geolocation support');
+    }
     try {
       await emergencyService.triggerSOS({
         patientId: patient.id,
         patientUid: patient.uid,
-        patientName: patient.name
+        patientName: patient.name,
+        location
       });
+      setStep('active_live_tracking');
     } catch (e) {
       console.warn('triggerSOS error:', e);
-    }
-    // db.triggerSOS(patient.id, liveCoords || { lat: 12.9716, lng: 77.5946 }, accuracy || 5);
-    // Only trigger if we have coordinates, or handle location unavailability
-    if (liveCoords) {
-      db.triggerSOS(patient.id, liveCoords, accuracy || 5);
-    } else {
-      // Maybe trigger with null coords or wait?
-      // For now, trigger without explicit coords to let triggerSOS handle it
-      db.triggerSOS(patient.id);
-    }
-    if (onTriggerCaregiverAlert) {
-      onTriggerCaregiverAlert(patient.homeLocation, false);
+      setActionError('Could not send the emergency alert. Check your connection and try again.');
+      return;
     }
   };
 
   const handleResolveEmergency = async () => {
     try {
       await emergencyService.resolveSOS(patient.id, 'Patient');
+      setStep('resolved');
+      setTimeout(() => {
+        setStep('confirm');
+        onClose();
+      }, 1500);
     } catch (e) {
       console.warn('resolveSOS error:', e);
+      setActionError('Could not resolve the alert. Check your connection and try again.');
     }
-    db.resolveSOS(patient.id);
-    setStep('resolved');
-    setTimeout(() => {
-      setStep('confirm');
-      onClose();
-    }, 1500);
   };
-
-  const emergencyHistory = db.getEmergencyAlerts();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-red-950/45 backdrop-blur-xs animate-in fade-in">
@@ -173,6 +197,7 @@ export const SOSModal: React.FC<SOSModalProps> = ({
 
               {/* Action Buttons matching Section 5 */}
               <div className="pt-2 space-y-2.5">
+                {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
                 <button
                   onClick={handleStartEmergency}
                   className="w-full py-4 rounded-2xl bg-[#F16F6F] hover:bg-red-600 text-white font-bold text-base shadow-md hover:shadow-lg transition-all active:scale-95 cursor-pointer flex items-center justify-center space-x-2"
@@ -203,7 +228,7 @@ export const SOSModal: React.FC<SOSModalProps> = ({
                   </div>
                   <div>
                     <h4 className="font-bold text-xs text-red-900">SOS Alert Active</h4>
-                    <p className="text-[11px] text-red-800">Live location shared with 2 caregivers</p>
+                  <p className="text-[11px] text-red-800">Emergency alert sent to connected caregivers</p>
                   </div>
                 </div>
                 <span className="text-[10px] font-bold text-red-700 bg-white px-2 py-0.5 rounded-full border border-red-200">
@@ -211,52 +236,25 @@ export const SOSModal: React.FC<SOSModalProps> = ({
                 </span>
               </div>
 
-              {/* Interactive Visual Map Card matching Sections 5 & 10 */}
-              <div className="relative w-full h-52 bg-[#E5ECE5] rounded-3xl overflow-hidden border border-gray-300 shadow-inner flex flex-col justify-between p-3">
-                
-                {/* Simulated Street Grid Lines */}
-                <div className="absolute inset-0 opacity-25 pointer-events-none">
-                  <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                    <defs>
-                      <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#263238" strokeWidth="1"/>
-                      </pattern>
-                    </defs>
-                    <rect width="100%" height="100%" fill="url(#grid)" />
-                  </svg>
-                </div>
-
-                {/* Map Landmarks */}
-                <div className="relative z-10 flex justify-between text-[10px] text-gray-500 font-bold">
-                  <span className="bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded-md">Bengaluru City Center</span>
-                  <span className="bg-white/80 backdrop-blur-xs px-2 py-0.5 rounded-md">{locationStatus}</span>
-                </div>
-
-                {/* Center Patient Pinpoint Marker with Pulsing Beacon */}
-                <div className="relative z-10 flex flex-col items-center justify-center my-auto">
-                  <div className="relative flex items-center justify-center">
-                    <div className="w-16 h-16 rounded-full bg-red-500/25 animate-ping absolute" />
-                    <div className="w-10 h-10 rounded-full bg-red-500/40 animate-pulse absolute" />
-                    <div className="w-7 h-7 rounded-full bg-red-600 border-2 border-white text-white flex items-center justify-center shadow-lg relative z-10">
-                      <MapPin className="w-4 h-4" />
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-bold text-red-950 bg-white/95 px-2.5 py-0.5 rounded-md shadow-xs mt-1">
-                    {patient.name}
-                  </span>
-                </div>
+              <div className="relative w-full h-52 bg-slate-100 rounded-3xl overflow-hidden border border-gray-300 shadow-inner flex items-center justify-center">
+                {liveCoords ? (
+                  <iframe title="Patient GPS location" className="absolute inset-0 w-full h-full border-0" loading="lazy"
+                    src={`https://maps.google.com/maps?q=${liveCoords.lat},${liveCoords.lng}&z=16&output=embed`} />
+                ) : (
+                  <p className="px-6 text-center text-sm text-gray-600">{locationStatus}. The SOS alert was sent without coordinates.</p>
+                )}
 
                 {/* Bottom Map Status Strip matching Section 5 */}
                 <div className="relative z-10 bg-white/95 backdrop-blur-xs p-2.5 rounded-2xl border border-gray-200 flex items-center justify-between text-xs">
                   <div className="flex items-center space-x-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className={`w-2.5 h-2.5 rounded-full ${liveCoords ? 'bg-emerald-500 animate-pulse' : 'bg-gray-400'}`} />
                     <div>
-                      <span className="font-bold text-[#263238] block text-[11px]">Live Location Shared</span>
-                      <span className="text-[10px] text-gray-500">Updated {lastUpdated} • ±{accuracy}m accuracy</span>
+                      <span className="font-bold text-[#263238] block text-[11px]">{liveCoords ? 'Live GPS location' : 'GPS location unavailable'}</span>
+                      <span className="text-[10px] text-gray-500">Updated {lastUpdated}{accuracy ? ` • ±${accuracy}m accuracy` : ''}</span>
                     </div>
                   </div>
                   <span className="text-[10px] font-mono text-gray-400">
-                    {liveCoords ? `${liveCoords.lat.toFixed(4)}, ${liveCoords.lng.toFixed(4)}` : 'Location unavailable'}
+                    {liveCoords ? `${liveCoords.lat.toFixed(4)}, ${liveCoords.lng.toFixed(4)}` : 'No coordinates'}
                   </span>
                 </div>
 
@@ -289,6 +287,7 @@ export const SOSModal: React.FC<SOSModalProps> = ({
 
               {/* Resolution button for caregiver / patient */}
               <div className="pt-2 border-t border-gray-100 flex justify-between items-center">
+                {actionError && <p role="alert" className="text-sm text-red-700">{actionError}</p>}
                 <button
                   onClick={handleResolveEmergency}
                   className="w-full py-2.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold flex items-center justify-center space-x-2"
@@ -341,9 +340,10 @@ export const SOSModal: React.FC<SOSModalProps> = ({
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-600">{hist.location}</p>
-                  <p className="text-[10px] text-gray-400">{hist.timestamp}</p>
+                  <p className="text-[10px] text-gray-400">{new Date(hist.timestamp).toLocaleString()}</p>
                 </div>
               ))}
+              {emergencyHistory.length === 0 && <p className="text-xs text-gray-500">No SOS alerts recorded for this patient.</p>}
             </div>
           )}
 

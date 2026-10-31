@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   ArrowLeft, 
   Bell, 
@@ -11,21 +11,77 @@ import {
   Check 
 } from 'lucide-react';
 import { AppNotification } from '../types';
-import { db } from '../services/db';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { firestore } from '../services/firebase';
 
 interface NotificationCenterModalProps {
   isOpen: boolean;
   onClose: () => void;
   userRole: 'patient' | 'caregiver' | null;
+  patientId: string;
 }
 
 export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = ({
   isOpen,
   onClose,
-  userRole
+  userRole,
+  patientId
 }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'patient' | 'caregiver'>('all');
-  const [notifications, setNotifications] = useState<AppNotification[]>(() => db.getNotifications());
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [readIds, setReadIds] = useState<string[]>(() => {
+    try { return JSON.parse(localStorage.getItem('keenkeep_read_notifications') || '[]'); } catch { return []; }
+  });
+
+  useEffect(() => {
+    if (!isOpen || !patientId) return;
+    const id = patientId.trim().toUpperCase();
+    let tasks: AppNotification[] = [];
+    let alerts: AppNotification[] = [];
+    const publish = () => setNotifications([...tasks, ...alerts].sort((a, b) => b.timestamp.localeCompare(a.timestamp)));
+    const taskUnsubscribe = onSnapshot(query(collection(firestore, 'tasks'), where('patientId', '==', id)), (snapshot) => {
+      tasks = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const done = data.completed === true || data.status === 'completed';
+        const ts = data.updatedAt?.toDate?.() || data.createdAt?.toDate?.();
+        return {
+          id: `task-${docSnap.id}`,
+          patientId: id,
+          title: done ? 'Task completed' : 'Scheduled task',
+          message: `${data.title || 'Care task'}${data.time ? ` • ${data.time}` : ''}`,
+          type: done ? 'task_completed' : 'meeting',
+          targetRole: done ? 'caregiver' : 'patient',
+          urgency: 'gentle',
+          timestamp: ts ? ts.toISOString() : (typeof data.updatedAt === 'string' ? data.updatedAt : typeof data.createdAt === 'string' ? data.createdAt : ''),
+          timeAgo: '',
+          read: readIds.includes(`task-${docSnap.id}`)
+        } as AppNotification;
+      });
+      publish();
+    }, (error) => console.error('[NotificationCenter] Task listener failed:', error));
+    const alertUnsubscribe = onSnapshot(query(collection(firestore, 'alerts'), where('patientId', '==', id)), (snapshot) => {
+      alerts = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        const alertDate = data.timestamp?.toDate?.() || (typeof data.timestamp === 'string' ? new Date(data.timestamp) : null);
+        return {
+          id: `alert-${docSnap.id}`,
+          patientId: id,
+          title: data.status === 'resolved' ? 'SOS resolved' : 'Emergency SOS alert',
+          message: `${data.patientName || 'Patient'}${data.location ? ` • ${data.location}` : ''}`,
+          type: 'sos_alert',
+          targetRole: 'caregiver',
+          urgency: data.status === 'active' ? 'emergency' : 'gentle',
+          timestamp: alertDate && !Number.isNaN(alertDate.getTime()) ? alertDate.toISOString() : '',
+          timeAgo: '',
+          read: readIds.includes(`alert-${docSnap.id}`),
+          latitude: typeof data.latitude === 'number' ? data.latitude : undefined,
+          longitude: typeof data.longitude === 'number' ? data.longitude : undefined
+        } as AppNotification;
+      });
+      publish();
+    }, (error) => console.error('[NotificationCenter] SOS listener failed:', error));
+    return () => { taskUnsubscribe(); alertUnsubscribe(); };
+  }, [isOpen, patientId, readIds]);
 
   if (!isOpen) return null;
 
@@ -37,8 +93,15 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
   });
 
   const handleMarkAllRead = () => {
-    notifications.forEach((n) => db.markNotificationRead(n.id));
-    setNotifications(db.getNotifications());
+    const next = Array.from(new Set([...readIds, ...notifications.map((n) => n.id)]));
+    setReadIds(next);
+    localStorage.setItem('keenkeep_read_notifications', JSON.stringify(next));
+  };
+
+  const markRead = (id: string) => {
+    const next = Array.from(new Set([...readIds, id]));
+    setReadIds(next);
+    localStorage.setItem('keenkeep_read_notifications', JSON.stringify(next));
   };
 
   const getNotifIcon = (type: string, urgency: string) => {
@@ -142,17 +205,16 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
         <div className="p-6 overflow-y-auto space-y-3 flex-1">
           {filteredNotifs.length === 0 ? (
             <div className="py-12 text-center text-gray-400 text-xs">
-              No new notifications
+              No task or emergency notifications for this patient yet.
             </div>
           ) : (
             filteredNotifs.map((notif) => (
               <div
                 key={notif.id}
                 onClick={() => {
-                  db.markNotificationRead(notif.id);
-                  setNotifications(db.getNotifications());
-                  if (notif.type === 'sos_alert' || notif.urgency === 'emergency') {
-                    window.open('https://www.google.com/maps/search/?api=1&query=12.9716,77.5946', '_blank');
+                  markRead(notif.id);
+                  if (notif.latitude != null && notif.longitude != null) {
+                    window.open(`https://www.google.com/maps/search/?api=1&query=${notif.latitude},${notif.longitude}`, '_blank');
                   }
                 }}
                 className={`p-3.5 rounded-2xl border transition-all flex items-start space-x-3.5 cursor-pointer hover:shadow-sm ${
@@ -170,7 +232,7 @@ export const NotificationCenterModal: React.FC<NotificationCenterModalProps> = (
                       {notif.title}
                     </h4>
                     <span className="text-[10px] text-gray-400 font-medium shrink-0 ml-2">
-                      {notif.timeAgo}
+                      {notif.timestamp ? new Date(notif.timestamp).toLocaleString() : 'Time unavailable'}
                     </span>
                   </div>
                   <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">

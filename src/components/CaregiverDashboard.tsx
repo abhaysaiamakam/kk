@@ -21,7 +21,6 @@ import {
   Square, 
   RotateCcw, 
   Check, 
-  MapPin, 
   Navigation, 
   Bell, 
   Lightbulb, 
@@ -66,7 +65,6 @@ interface CaregiverDashboardProps {
   onOpenNotifications: () => void;
   onOpenVoiceNotes: () => void;
   onAddPatient: () => void;
-  onResolveSos: (patientId: string) => void;
   onViewSosModal: () => void;
 }
 
@@ -85,7 +83,6 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   onOpenNotifications,
   onOpenVoiceNotes,
   onAddPatient,
-  onResolveSos,
   onViewSosModal
 }) => {
   // Available Summaries Tab (Daily, Weekly, Missed, Medication, Mood) matching Section 8
@@ -99,6 +96,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   const [activities, setActivities] = useState<ActivityLog[]>([]);
   const [tasksList, setTasksList] = useState<TaskItem[]>(tasks);
   const [alerts, setAlerts] = useState<EmergencyAlertItem[]>([]);
+  const [sosActionError, setSosActionError] = useState('');
   const [moods, setMoods] = useState<MoodRecord[]>([]);
   const [suggestions, setSuggestions] = useState<RoutineSuggestion[]>(() => db.getRoutineSuggestions(activePatient?.id || ''));
   const [speechState, setSpeechState] = useState(speechController.getState());
@@ -266,8 +264,13 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
   };
 
   const handleResolveSosCall = async (patientId: string) => {
-    await emergencyService.resolveSOS(patientId, caregiverName || 'Caregiver');
-    onResolveSos(patientId);
+    setSosActionError('');
+    try {
+      await emergencyService.resolveSOS(patientId, caregiverName || 'Caregiver');
+    } catch (error) {
+      console.error('Could not resolve SOS alert:', error);
+      setSosActionError('Could not resolve the SOS alert. Check your connection and try again.');
+    }
   };
 
   const filteredPatients = patients.filter(
@@ -441,42 +444,19 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
             </div>
           </div>
 
-          {/* Patient's actual live GPS location on a map */}
-          <div className="relative w-full h-48 bg-[#E5ECE5] rounded-2xl overflow-hidden border border-red-200 shadow-inner flex flex-col justify-between p-3">
-            <div className="absolute inset-0 opacity-25 pointer-events-none">
-              <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <pattern id="grid-caregiver" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#263238" strokeWidth="1"/>
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid-caregiver)" />
-              </svg>
-            </div>
-            <div className="relative z-10 flex justify-between text-[10px] text-gray-500 font-bold">
-              <span className="bg-white/80 px-2 py-0.5 rounded-md">{activePatient.homeLocation || 'Live GPS Beacon'}</span>
-              <span className="bg-white/80 px-2 py-0.5 rounded-md">GPS Locked</span>
-            </div>
-            <div className="relative z-10 flex flex-col items-center justify-center my-auto">
-              <div className="relative flex items-center justify-center">
-                <div className="w-14 h-14 rounded-full bg-red-500/25 animate-ping absolute" />
-                <div className="w-8 h-8 rounded-full bg-red-600 border-2 border-white text-white flex items-center justify-center shadow-lg relative z-10">
-                  <MapPin className="w-4 h-4" />
-                </div>
-              </div>
-              <span className="text-[11px] font-bold text-red-950 bg-white/95 px-2.5 py-0.5 rounded-md shadow-xs mt-1">
-                {activePatient.name}
-              </span>
-            </div>
-            <div className="relative z-10 bg-white/95 p-2 rounded-xl border border-gray-200 flex items-center justify-between text-xs">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="font-bold text-[#263238] text-[11px]">Live GPS Coordinates</span>
-              </div>
-              <span className="text-[10px] font-mono text-gray-500">
-                {activePatient.currentLatitude && activePatient.currentLongitude
-                  ? `${activePatient.currentLatitude.toFixed(4)}, ${activePatient.currentLongitude.toFixed(4)}`
-                  : 'Patient location unavailable'}
+          <div className="relative w-full h-48 bg-slate-100 rounded-2xl overflow-hidden border border-red-200 shadow-inner flex items-center justify-center">
+            {activePatient.currentLatitude != null && activePatient.currentLongitude != null ? (
+              <iframe title={`${activePatient.name} current GPS location`} className="absolute inset-0 w-full h-full border-0" loading="lazy"
+                src={`https://maps.google.com/maps?q=${activePatient.currentLatitude},${activePatient.currentLongitude}&z=16&output=embed`} />
+            ) : (
+              <p className="px-6 text-center text-sm text-gray-600">Patient location unavailable. No GPS coordinates have been received.</p>
+            )}
+            <div className="absolute bottom-2 left-2 right-2 bg-white/95 p-2 rounded-xl border border-gray-200 flex items-center justify-between text-xs">
+              <span className="font-bold text-[#263238] text-[11px]">{activePatient.currentLatitude != null && activePatient.currentLongitude != null ? 'Live GPS coordinates' : 'No location fix'}</span>
+              <span className="text-[10px] font-mono text-gray-600">
+                {activePatient.currentLatitude != null && activePatient.currentLongitude != null
+                  ? `${activePatient.currentLatitude.toFixed(5)}, ${activePatient.currentLongitude.toFixed(5)}${activePatient.locationAccuracy ? ` • ±${Math.round(Number(activePatient.locationAccuracy))}m` : ''}`
+                  : 'Waiting for patient GPS'}
               </span>
             </div>
           </div>
@@ -485,10 +465,11 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
             <button
               onClick={() => {
-                const lat = activePatient.currentLatitude || 12.9716;
-                const lng = activePatient.currentLongitude || 77.5946;
-                window.open(`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`, '_blank');
+                if (activePatient.currentLatitude != null && activePatient.currentLongitude != null) {
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${activePatient.currentLatitude},${activePatient.currentLongitude}`, '_blank');
+                }
               }}
+              disabled={activePatient.currentLatitude == null || activePatient.currentLongitude == null}
               className="py-3 px-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs cursor-pointer"
             >
               <Navigation className="w-4 h-4" />
@@ -525,6 +506,7 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
               <span>Call 108</span>
             </a>
           </div>
+          {sosActionError && <p role="alert" className="text-sm text-red-700">{sosActionError}</p>}
         </div>
       )}
 

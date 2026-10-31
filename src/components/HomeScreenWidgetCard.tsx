@@ -23,8 +23,8 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
     setPermissionStatus(notificationService.getPermissionStatus());
     if (granted) {
       notificationService.showLocalNotification(
-        'KeenKeep Reminders Active',
-        'Background task alarms & WorkManager notifications are now enabled.'
+        'KeenKeep Notifications Active',
+        'Browser notifications for new tasks and emergency alerts are enabled while KeenKeep is open.'
       );
     }
   };
@@ -40,10 +40,10 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
           </div>
           <div>
             <h3 className="font-bold text-base text-[#263238] font-['Poppins']">
-              Home Screen Task Widget
+              Task Notifications
             </h3>
             <p className="text-xs text-gray-500">
-              Android Background Alarms & WorkManager
+              Browser task and emergency notifications
             </p>
           </div>
         </div>
@@ -60,12 +60,12 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
           {permissionStatus === 'granted' ? (
             <>
               <Bell className="w-3.5 h-3.5 text-[#2D4F3B]" />
-              <span>Alarms Active</span>
+              <span>Notifications On</span>
             </>
           ) : (
             <>
               <BellOff className="w-3.5 h-3.5 text-red-600" />
-              <span>Enable Alarms</span>
+              <span>Enable Notifications</span>
             </>
           )}
         </button>
@@ -75,9 +75,9 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
       <div className="space-y-2.5 mb-4">
         <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
           <span>Upcoming Schedule ({pendingTasks.length})</span>
-          <span className="text-[#2D4F3B] flex items-center space-x-1">
-            <RefreshCw className="w-3 h-3 animate-spin" />
-            <span>Auto-Reschedule on Reboot</span>
+            <span className="text-[#2D4F3B] flex items-center space-x-1">
+            <RefreshCw className="w-3 h-3" />
+            <span>Synced from care plan</span>
           </span>
         </div>
 
@@ -104,7 +104,7 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
           ))
         ) : (
           <div className="p-4 text-center bg-white/60 rounded-2xl border border-dashed border-gray-200">
-            <p className="text-xs text-gray-500 font-medium">No pending tasks for today. All routines completed!</p>
+            <p className="text-xs text-gray-500 font-medium">No tasks are scheduled for this patient.</p>
           </div>
         )}
       </div>
