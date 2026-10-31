@@ -29,7 +29,7 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
       setPermissionStatus(notificationService.getPermissionStatus());
       notificationService.showLocalNotification(
         'KeenKeep Notifications Active',
-        'Phone alerts are enabled for task changes and SOS updates.'
+        'Phone alerts are enabled for due-time task reminders, task changes, and SOS updates.'
       );
     } catch (error) {
       setEnableError(error instanceof Error ? error.message : 'Could not enable phone alerts.');
@@ -51,7 +51,7 @@ export const HomeScreenWidgetCard: React.FC<HomeScreenWidgetCardProps> = ({ task
               Task Notifications
             </h3>
             <p className="text-xs text-gray-500">
-              Phone alerts for task changes and SOS
+              Due-time task reminders, task changes, and SOS
             </p>
           </div>
         </div>
