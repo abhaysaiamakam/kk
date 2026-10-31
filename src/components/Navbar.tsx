@@ -78,10 +78,8 @@ export const Navbar: React.FC<NavbarProps> = ({
         
         {/* MindCare Logo */}
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-[#A8C9B0] flex items-center justify-center shadow-sm text-white">
-            <svg className="w-6 h-6 text-[#2D4F3B]" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17.5,3 C17.5,3 15.2,5.3 14,8.5 C12.8,11.7 13.5,14 13.5,14 C13.5,14 11.2,13.3 8,14.5 C4.8,15.7 2.5,18 2.5,18 C2.5,18 4.8,20.3 8,19.1 C11.2,17.9 11.9,15.6 11.9,15.6 C11.9,15.6 14.2,16.3 17.4,15.1 C20.6,13.9 22.9,11.6 22.9,11.6 C22.9,11.6 20.6,9.3 17.4,10.5 C14.2,11.7 13.5,14 13.5,14 C13.5,14 14.2,11.7 15.4,8.5 C16.6,5.3 17.5,3 17.5,3 Z" />
-            </svg>
+          <div className="w-10 h-10 rounded-2xl overflow-hidden shadow-sm bg-[#A9CBB4] flex items-center justify-center">
+            <img src="/assets/aistudio/image_ff1a441e.png" alt="KeenKeep Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="flex items-center space-x-2">
