@@ -48,6 +48,21 @@ service cloud.firestore {
       allow delete: if isOwner(uid);
     }
 
+    // A signed-in user can manage only their own browser/device push tokens.
+    match /notificationDevices/{deviceId} {
+      allow get, list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create, update: if isOwner(incoming().uid) &&
+        incoming().token is string && incoming().token.size() > 0 && incoming().token.size() <= 4096 &&
+        incoming().patientId is string && incoming().patientId.size() > 0 && incoming().patientId.size() <= 128 &&
+        incoming().role in ['patient', 'caregiver'] &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == incoming().role &&
+        ((incoming().role == 'patient' &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.patientId == incoming().patientId) ||
+         (incoming().role == 'caregiver' &&
+          incoming().patientId in get(/databases/$(database)/documents/users/$(request.auth.uid)).data.connectedPatientIds));
+      allow delete: if isSignedIn() && existing().uid == request.auth.uid;
+    }
+
     // 2. Patients collection
     function isValidPatient(data) {
       return data.id is string && data.id.size() <= 128 &&

@@ -210,9 +210,14 @@ export default function App() {
   }, [activePatient?.id, activePatient?.uid]);
 
   useEffect(() => {
-    if (!currentUser || !activePatient.id) return;
-    return notificationService.subscribeToRealtimeEvents(activePatient.id);
-  }, [currentUser?.uid, activePatient.id]);
+    if (!currentUser) return;
+    let unsubscribe: (() => void) | undefined;
+    let active = true;
+    notificationService.listenForForegroundPush((title, body, url) => notificationService.showLocalNotification(title, body, url))
+      .then((stop) => { if (active) unsubscribe = stop; else stop(); })
+      .catch((error) => console.warn('[NotificationService] Foreground push listener could not start:', error));
+    return () => { active = false; unsubscribe?.(); };
+  }, [currentUser?.uid]);
 
   // Unread Emergency / High Priority Alerts Count
   const unreadAlertCount = patients.filter((p) => p.status === 'sos_alert').length;
@@ -519,6 +524,8 @@ export default function App() {
         onLanguageChange={setLanguage}
         onLogout={handleLogout}
         onOpenDeleteAccount={() => setShowDeleteAccountModal(true)}
+        currentUserUid={currentUser?.uid}
+        currentUserRole={userRole}
       />
 
       {/* Delete Account Modal */}
