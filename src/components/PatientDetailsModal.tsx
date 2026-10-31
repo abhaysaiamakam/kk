@@ -13,7 +13,7 @@ import {
   Phone,
   Smartphone
 } from 'lucide-react';
-import { PatientProfile, Language } from '../types';
+import { PatientProfile, Language, UserRole } from '../types';
 import { translations } from '../data/translations';
 import { UserAvatar } from './UserAvatar';
 import { ImageUploader } from './ImageUploader';
@@ -32,6 +32,8 @@ interface PatientDetailsModalProps {
   onLanguageChange: (lang: Language) => void;
   onLogout?: () => void;
   onOpenDeleteAccount?: () => void;
+  currentUserUid?: string;
+  currentUserRole?: UserRole;
 }
 
 export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
@@ -42,7 +44,9 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   language,
   onLanguageChange,
   onLogout,
-  onOpenDeleteAccount
+  onOpenDeleteAccount,
+  currentUserUid,
+  currentUserRole
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -50,6 +54,8 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   const [notificationPermission, setNotificationPermission] = useState(notificationService.getPermissionStatus());
   const [showWidgetGuide, setShowWidgetGuide] = useState(false);
   const [locationError, setLocationError] = useState('');
+  const [notificationError, setNotificationError] = useState('');
+  const [isEnablingNotifications, setIsEnablingNotifications] = useState(false);
 
   useEffect(() => {
     if (isOpen) setNotificationPermission(notificationService.getPermissionStatus());
@@ -69,9 +75,18 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
   const t = translations[language];
 
   const enableNotifications = async () => {
-    const granted = await notificationService.requestPermission();
-    setNotificationPermission(notificationService.getPermissionStatus());
-    if (granted) notificationService.showLocalNotification('KeenKeep notifications enabled', 'Task and SOS notifications are enabled while the app is open.');
+    setNotificationError('');
+    setIsEnablingNotifications(true);
+    try {
+      if (!currentUserUid || !currentUserRole) throw new Error('Sign in to enable notifications.');
+      await notificationService.enablePushForUser({ uid: currentUserUid, patientId: patient.id, role: currentUserRole });
+      setNotificationPermission(notificationService.getPermissionStatus());
+      notificationService.showLocalNotification('KeenKeep notifications enabled', 'Task schedule and SOS alerts can now appear as phone notifications.');
+    } catch (error) {
+      setNotificationError(error instanceof Error ? error.message : 'Could not enable push notifications.');
+    } finally {
+      setIsEnablingNotifications(false);
+    }
   };
 
   const handleCopyId = () => {
@@ -394,14 +409,16 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] text-gray-500">
-                    {notificationPermission === 'granted' ? 'Enabled' : notificationPermission === 'denied' ? 'Blocked in browser settings' : notificationPermission === 'unsupported' ? 'Unsupported' : 'Permission needed'}
+                    {notificationPermission === 'granted' ? 'Permission granted' : notificationPermission === 'denied' ? 'Blocked in browser settings' : notificationPermission === 'unsupported' ? 'Unsupported' : 'Permission needed'}
                   </span>
-                  {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && notificationPermission !== 'denied' && (
-                    <button type="button" onClick={enableNotifications} className="px-3 py-1.5 rounded-xl bg-[#3B664B] text-white text-xs font-bold">
-                      Enable
+                  {notificationPermission !== 'unsupported' && notificationPermission !== 'denied' && (
+                    <button type="button" disabled={isEnablingNotifications} onClick={enableNotifications} className="px-3 py-1.5 rounded-xl bg-[#3B664B] text-white text-xs font-bold disabled:opacity-50">
+                      {isEnablingNotifications ? 'Enabling…' : notificationPermission === 'granted' ? 'Enable phone alerts' : 'Enable'}
                     </button>
                   )}
                 </div>
+                {notificationError && <p role="alert" className="mt-2 text-xs text-red-700">{notificationError}</p>}
+                {notificationPermission === 'granted' && !notificationError && <p className="mt-2 text-xs text-gray-500">On iPhone, install KeenKeep to the Home Screen and open it there to receive push alerts while it is closed.</p>}
               </div>
 
               {/* Add Home Screen Widget Option */}
