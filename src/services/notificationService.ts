@@ -1,6 +1,17 @@
-import { TaskItem } from '../types';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { firestore } from './firebase';
+import { deleteDoc, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { getMessaging, getToken, isSupported, onMessage } from 'firebase/messaging';
+import { app, auth, firestore } from './firebase';
+
+const deviceIdKey = 'keenkeep_notification_device_id';
+
+function getDeviceId(): string {
+  let id = localStorage.getItem(deviceIdKey);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(deviceIdKey, id);
+  }
+  return id;
+}
 
 export const notificationService = {
   async requestPermission(): Promise<boolean> {
@@ -31,6 +42,49 @@ export const notificationService = {
     return Notification.permission;
   },
 
+  async enablePushForUser(input: { uid: string; patientId: string; role: 'patient' | 'caregiver' }): Promise<void> {
+    if (!window.isSecureContext || !('Notification' in window) || !('serviceWorker' in navigator)) {
+      throw new Error('Push notifications are not supported by this browser. On iPhone, install KeenKeep to the Home Screen and open it there.');
+    }
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY as string | undefined;
+    if (!vapidKey) throw new Error('Push notifications are not configured yet. Add the Firebase Web Push certificate key to VITE_FIREBASE_VAPID_KEY and redeploy.');
+
+    const granted = await this.requestPermission();
+    if (!granted) throw new Error('Notification permission was not granted. Allow KeenKeep notifications in your browser or phone settings.');
+    if (!(await isSupported())) throw new Error('This browser cannot receive Firebase push notifications. On iPhone, install KeenKeep to the Home Screen and open it there.');
+    const registration = await navigator.serviceWorker.ready;
+    const token = await getToken(getMessaging(app), { vapidKey, serviceWorkerRegistration: registration });
+    if (!token) throw new Error('Firebase did not return a push token. Please try again.');
+
+    const uid = auth.currentUser?.uid;
+    if (!uid || uid !== input.uid) throw new Error('Your sign-in session changed. Sign in again, then enable notifications.');
+    const patientId = input.patientId.trim().toUpperCase();
+    if (!patientId) throw new Error('Select a patient before enabling task and SOS notifications.');
+
+    await setDoc(doc(firestore, 'notificationDevices', `${uid}_${getDeviceId()}`), {
+      uid,
+      patientId,
+      role: input.role,
+      token,
+      updatedAt: serverTimestamp(),
+      userAgent: navigator.userAgent.slice(0, 300)
+    });
+  },
+
+  async disablePushForUser(uid: string): Promise<void> {
+    const id = localStorage.getItem(deviceIdKey);
+    if (!id) return;
+    await deleteDoc(doc(firestore, 'notificationDevices', `${uid}_${id}`));
+  },
+
+  async listenForForegroundPush(onNotification: (title: string, body: string, url?: string) => void): Promise<() => void> {
+    if (!(await isSupported())) return () => {};
+    return onMessage(getMessaging(app), (payload) => {
+      const data = payload.data || {};
+      if (data.title || data.body) onNotification(data.title || 'KeenKeep', data.body || '', data.url || '/');
+    });
+  },
+
   showLocalNotification(title: string, body: string, url = '/') {
     if ('Notification' in window && Notification.permission === 'granted') {
       try {
@@ -55,73 +109,4 @@ export const notificationService = {
     }
   },
 
-  subscribeToRealtimeEvents(patientId: string): () => void {
-    if (!patientId) return () => {};
-    const formattedId = patientId.trim().toUpperCase();
-    let tasksReady = false;
-    let alertsReady = false;
-    const taskQuery = query(collection(firestore, 'tasks'), where('patientId', '==', formattedId));
-    const alertQuery = query(collection(firestore, 'alerts'), where('patientId', '==', formattedId));
-    const unsubscribeTasks = onSnapshot(taskQuery, (snapshot) => {
-      if (!tasksReady) {
-        tasksReady = true;
-        return;
-      }
-      snapshot.docChanges().forEach((change) => {
-        const task = change.doc.data();
-        if (change.type === 'added') {
-          this.showLocalNotification('New care task', `${task.title || 'A task'} is scheduled for ${task.time || task.dueTime || 'today'}.`);
-        } else if (change.type === 'modified' && (task.completed === true || task.status === 'completed')) {
-          this.showLocalNotification('Task completed', `${task.title || 'A care task'} was marked complete.`);
-        }
-      });
-    }, (error) => console.error('[NotificationService] Task listener failed:', error));
-    const unsubscribeAlerts = onSnapshot(alertQuery, (snapshot) => {
-      if (!alertsReady) {
-        alertsReady = true;
-        return;
-      }
-      snapshot.docChanges().forEach((change) => {
-        const alert = change.doc.data();
-        if (change.type === 'added' && alert.status === 'active') {
-          this.showLocalNotification('Emergency SOS', `${alert.patientName || 'A patient'} needs help. Open KeenKeep to view their location.`, '/');
-        } else if (change.type === 'modified' && alert.status === 'resolved') {
-          this.showLocalNotification('SOS resolved', `${alert.patientName || 'The patient'}’s emergency was marked resolved.`);
-        }
-      });
-    }, (error) => console.error('[NotificationService] SOS listener failed:', error));
-    return () => {
-      unsubscribeTasks();
-      unsubscribeAlerts();
-    };
-  },
-
-  scheduleTaskReminder(task: TaskItem) {
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-    // Calculate time until task
-    try {
-      const now = new Date();
-      // Parse task time (e.g. "09:00 AM")
-      const [timeStr, modifier] = task.time.split(' ');
-      let [hours, minutes] = timeStr.split(':').map(Number);
-      if (modifier === 'PM' && hours < 12) hours += 12;
-      if (modifier === 'AM' && hours === 12) hours = 0;
-
-      const taskDate = new Date();
-      taskDate.setHours(hours, minutes, 0, 0);
-
-      const delay = taskDate.getTime() - now.getTime();
-      if (delay > 0) {
-        setTimeout(() => {
-          this.showLocalNotification(
-            `Reminder: ${task.title}`,
-            `Scheduled for ${task.time} (${task.patientName || 'Patient'})`
-          );
-        }, delay);
-      }
-    } catch (e) {
-      console.warn('Error scheduling task reminder:', e);
-    }
-  }
 };
