@@ -213,7 +213,9 @@ export default function App() {
     if (!currentUser) return;
     let unsubscribe: (() => void) | undefined;
     let active = true;
-    notificationService.listenForForegroundPush((title, body, url) => notificationService.showLocalNotification(title, body, url))
+    notificationService.identifyUser(currentUser.uid)
+      .catch((error) => console.warn('[NotificationService] OneSignal user identity could not be restored:', error));
+    notificationService.listenForForegroundPush(() => {})
       .then((stop) => { if (active) unsubscribe = stop; else stop(); })
       .catch((error) => console.warn('[NotificationService] Foreground push listener could not start:', error));
     return () => { active = false; unsubscribe?.(); };
@@ -241,6 +243,7 @@ export default function App() {
 
   const handleLogout = async () => {
     try {
+      await notificationService.logoutUser();
       await authService.signOut();
     } catch (e) {
       console.warn('Sign out warning:', e);
