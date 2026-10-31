@@ -1,12 +1,12 @@
 {
-  "projectId": "inner-network-s83d0",
-  "appId": "1:123228123777:web:e9a08ca78b20b606d81380",
-  "apiKey": "AIzaSyDD1vWB6yrebRCx5WC_ATnHF2TJE2MamQY",
-  "authDomain": "inner-network-s83d0.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-mindcarepatientc-7cb95a65-fc91-4487-a3a5-4a40a250f022",
-  "storageBucket": "inner-network-s83d0.firebasestorage.app",
-  "messagingSenderId": "123228123777",
+  "projectId": "keenkeep-live-2026",
+  "appId": "1:504448463283:web:2172803b0fb737ee9ddbc6",
+  "apiKey": "AIzaSyCBM3LGpLj9KVMpEJItQfik8suG85SDEe8",
+  "authDomain": "keenkeep-live-2026.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "keenkeep-live-2026.firebasestorage.app",
+  "messagingSenderId": "504448463283",
   "measurementId": "",
-  "oAuthClientId": "123228123777-ckpi2dc0rupv2jkoh2s1rmbr7bg50pja.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }
