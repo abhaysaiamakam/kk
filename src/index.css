@@ -1,15 +1,25 @@
 @import "tailwindcss";
 
 @layer base {
-  body {
+  *, ::before, ::after {
+    box-sizing: border-box;
+  }
+  html, body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: #263238;
     background-color: #F8F7F0;
     -webkit-tap-highlight-color: transparent;
+    max-width: 100vw;
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
   }
 
   h1, h2, h3, h4, h5, h6 {
     font-family: 'Poppins', 'Inter', sans-serif;
+  }
+
+  button, input, select, textarea {
+    touch-action: manipulation;
   }
 }
 
