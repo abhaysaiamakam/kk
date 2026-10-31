@@ -20,6 +20,11 @@
     ]
   },
   "auth": {
+    "authorizedDomains": [
+      "kk-nine-beta.vercel.app",
+      "keenkeep-live-2026.firebaseapp.com",
+      "localhost"
+    ],
     "providers": {
       "emailPassword": true
     }
