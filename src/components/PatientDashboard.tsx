@@ -32,6 +32,7 @@ import { PatientProfile, TaskItem, Language } from '../types';
 import { translations } from '../data/translations';
 import { speakText, playChime } from '../utils/audio';
 import { UserAvatar } from './UserAvatar';
+import { LocationSharingToggle } from './LocationSharingToggle';
 import { authService, CaregiverConnectionRequest } from '../services/authService';
 import { calculateAgeFromDob } from '../utils/ageUtils';
 import { sortTasksChronologically } from '../utils/timeUtils';
@@ -570,6 +571,9 @@ export const PatientDashboard: React.FC<PatientDashboardProps> = ({
 
         </div>
       </div>
+
+      {/* Location Sharing Toggle */}
+      <LocationSharingToggle patient={patient} />
 
       {/* PROMINENT RED EMERGENCY SOS BUTTON matching Section 2 bottom */}
       <button

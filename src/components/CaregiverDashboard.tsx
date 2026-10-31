@@ -425,18 +425,18 @@ export const CaregiverDashboard: React.FC<CaregiverDashboardProps> = ({
       )}
 
       {/* EMERGENCY SOS BANNER & LIVE TRACKING matching Section 10 */}
-      {patients.length > 0 && activePatient && emergencyAlert && (
-        <div className="p-4 sm:p-5 bg-red-50 border-2 border-red-300 rounded-3xl shadow-md space-y-4 animate-pulse">
+      {patients.length > 0 && activePatient && (activePatient.liveLocationEnabled || emergencyAlert) && (
+        <div className={`p-4 sm:p-5 border-2 rounded-3xl shadow-md space-y-4 ${emergencyAlert ? 'bg-red-50 border-red-300 animate-pulse' : 'bg-emerald-50 border-emerald-200'}`}>
           <div className="flex items-center space-x-3.5">
-            <div className="w-11 h-11 rounded-2xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0">
-              SOS
+            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black text-sm shrink-0 ${emergencyAlert ? 'bg-red-600 text-white' : 'bg-emerald-600 text-white'}`}>
+              {emergencyAlert ? 'SOS' : 'GPS'}
             </div>
             <div>
-              <h4 className="font-bold text-sm text-red-950 font-['Poppins']">
-                🚨 High Priority: SOS Alert Active
+              <h4 className="font-bold text-sm text-gray-950 font-['Poppins']">
+                {emergencyAlert ? '🚨 High Priority: SOS Alert Active' : 'Live Patient Location Active'}
               </h4>
-              <p className="text-xs text-red-800">
-                {activePatient.name} ({activePatient.id}) initiated emergency beacon. Live location broadcasting.
+              <p className="text-xs text-gray-800">
+                {activePatient.name} ({activePatient.id}) {emergencyAlert ? 'initiated emergency beacon.' : 'is sharing their live location.'}
               </p>
             </div>
           </div>

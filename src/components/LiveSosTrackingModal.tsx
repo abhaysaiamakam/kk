@@ -13,6 +13,8 @@ import {
   AlertTriangle 
 } from 'lucide-react';
 import { EmergencyAlertItem, PatientProfile, Language } from '../types';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { firestore } from '../services/firebase';
 
 interface LiveSosTrackingModalProps {
   isOpen: boolean;
@@ -44,27 +46,25 @@ export const LiveSosTrackingModal: React.FC<LiveSosTrackingModalProps> = ({
       setLiveMinutesAgo((m) => m + 1);
     }, 60000);
 
-    if ('geolocation' in navigator) {
-      const watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          setCurrentCoords({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude
-          });
-        },
-        (err) => {
-          console.warn('Live SOS GPS watch warning:', err.message);
-        },
-        { enableHighAccuracy: true, maximumAge: 5000, timeout: 5000 }
-      );
-      return () => {
-        clearInterval(timer);
-        navigator.geolocation.clearWatch(watchId);
-      };
-    }
+    // Subscribe to real-time updates for THIS specific alert document
+    const alertRef = doc(firestore, 'alerts', alert.id);
+    const unsubscribe = onSnapshot(alertRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data.latitude && data.longitude) {
+          setCurrentCoords({ lat: data.latitude, lng: data.longitude });
+        }
+        if (data.status === 'resolved') {
+          setIsResolved(true);
+        }
+      }
+    });
 
-    return () => clearInterval(timer);
-  }, []);
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
+  }, [alert.id]);
 
   if (!isOpen) return null;
 
