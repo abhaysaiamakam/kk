@@ -81,7 +81,7 @@ export const PatientDetailsModal: React.FC<PatientDetailsModalProps> = ({
       if (!currentUserUid || !currentUserRole) throw new Error('Sign in to enable notifications.');
       await notificationService.enablePushForUser({ uid: currentUserUid, patientId: patient.id, role: currentUserRole });
       setNotificationPermission(notificationService.getPermissionStatus());
-      notificationService.showLocalNotification('KeenKeep notifications enabled', 'Task schedule and SOS alerts can now appear as phone notifications.');
+      notificationService.showLocalNotification('KeenKeep notifications enabled', 'Due-time task reminders, task changes, and SOS alerts can now appear as phone notifications.');
     } catch (error) {
       setNotificationError(error instanceof Error ? error.message : 'Could not enable push notifications.');
     } finally {
